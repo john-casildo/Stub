@@ -1,0 +1,194 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Domine:wght@700&family=Archivo:wght@400;500;600&family=Unbounded:wght@800&display=swap">
+<style>
+  :root {
+    --bg: #ECE7DC;
+    --bg-weave: #E4DECE;
+    --surface: #FBF9F3;
+    --ink: #211C15;
+    --ink-70: rgba(33,28,21,.70);
+    --ink-50: rgba(33,28,21,.50);
+    --line: rgba(33,28,21,.13);
+    --accent: #0080FF;
+    --accent-strong: #0060B8;
+    --on-accent: #F5F9FF;
+    --shadow: rgba(58,42,18,.20);
+    --grad-pop: linear-gradient(135deg, var(--accent) 0%, #00D9B5 100%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17130F;
+      --bg-weave: #1E1811;
+      --surface: #221B14;
+      --ink: #F3ECDD;
+      --ink-70: rgba(243,236,221,.72);
+      --ink-50: rgba(243,236,221,.52);
+      --line: rgba(243,236,221,.14);
+      --accent: #2E9CFF;
+      --accent-strong: #66B6FF;
+      --on-accent: #00243F;
+      --shadow: rgba(0,0,0,.55);
+      --grad-pop: linear-gradient(135deg, var(--accent) 0%, #34F5D0 100%);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #17130F;
+    --bg-weave: #1E1811;
+    --surface: #221B14;
+    --ink: #F3ECDD;
+    --ink-70: rgba(243,236,221,.72);
+    --ink-50: rgba(243,236,221,.52);
+    --line: rgba(243,236,221,.14);
+    --accent: #2E9CFF;
+    --accent-strong: #66B6FF;
+    --on-accent: #00243F;
+    --shadow: rgba(0,0,0,.55);
+    --grad-pop: linear-gradient(135deg, var(--accent) 0%, #34F5D0 100%);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(circle at 20% 10%, var(--bg-weave), transparent 45%), var(--bg);
+    color: var(--ink);
+    font-family: 'Archivo', sans-serif;
+  }
+  .page { max-width: 980px; margin: 0 auto; padding: 64px 24px 96px; }
+  .intro { max-width: 620px; margin: 0 auto 64px; text-align: center; }
+  .intro h1 { font-family: 'Domine', serif; font-size: 2rem; margin: 0 0 10px; }
+  .intro p { color: var(--ink-50); font-size: .95rem; line-height: 1.6; margin: 0; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 28px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 28px 24px;
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+    box-shadow: 0 14px 26px -18px var(--shadow);
+  }
+  .card .label { font-family: 'Domine', serif; font-weight: 700; font-size: 1.05rem; text-align: center; }
+  .card .note { font-size: .82rem; color: var(--ink-50); text-align: center; line-height: 1.5; margin-top: -8px; }
+
+  .sizes { display: flex; align-items: flex-end; gap: 22px; }
+  .sizes .at { text-align: center; }
+  .sizes .at span { display: block; margin-top: 6px; font-size: .68rem; color: var(--ink-50); font-family: 'Archivo', sans-serif; }
+
+  /* ===== mark A: torn stub ===== */
+  .markA {
+    width: 96px; height: 96px;
+    background-image: var(--grad-pop);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%, 9.6% 83.3%, 0 66.6%, 9.6% 50%, 0 33.3%, 9.6% 16.6%, 0 0);
+  }
+  .markA.small { width: 30px; height: 30px; }
+
+  /* ===== mark B: torn stub + check ===== */
+  .markB { position: relative; width: 96px; height: 96px; }
+  .markB.small { width: 30px; height: 30px; }
+  .markB .shape {
+    position: absolute; inset: 0;
+    background-image: var(--grad-pop);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%, 9.6% 83.3%, 0 66.6%, 9.6% 50%, 0 33.3%, 9.6% 16.6%, 0 0);
+  }
+  .markB svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  /* ===== mark C: perforated edge, rounded rect ===== */
+  .markC { position: relative; width: 96px; height: 96px; border-radius: 18px; overflow: hidden; background-image: var(--grad-pop); }
+  .markC.small { width: 30px; height: 30px; border-radius: 6px; }
+  .markC .dots { position: absolute; left: 10px; top: 8px; bottom: 8px; width: 4px; display: flex; flex-direction: column; justify-content: space-between; }
+  .markC.small .dots { left: 4px; top: 4px; bottom: 4px; width: 2px; }
+  .markC .dots i { display: block; width: 4px; height: 4px; border-radius: 50%; background: var(--on-accent); opacity: .85; }
+  .markC.small .dots i { width: 2px; height: 2px; }
+
+  /* ===== mark D: monogram ===== */
+  .markD {
+    width: 96px; height: 96px; border-radius: 22px;
+    background-image: var(--grad-pop);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .markD.small { width: 30px; height: 30px; border-radius: 8px; }
+  .markD span { font-family: 'Unbounded', sans-serif; font-weight: 800; color: var(--on-accent); font-size: 2.6rem; }
+  .markD.small span { font-size: .95rem; }
+
+  .lockup {
+    margin: 72px auto 0; max-width: 420px; text-align: center;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 20px;
+    padding: 40px 32px; box-shadow: 0 14px 26px -18px var(--shadow);
+  }
+  .lockup .row { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .lockup .markA { width: 46px; height: 46px; }
+  .lockup .word { font-family: 'Domine', serif; font-weight: 700; font-size: 2.2rem; }
+  .lockup .tag { margin-top: 14px; font-size: .85rem; color: var(--ink-50); font-style: italic; font-family: 'Domine', serif; }
+  .lockup .cap { display: block; margin-top: 22px; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+</style>
+
+<div class="page">
+  <div class="intro">
+    <h1>Stub &mdash; logo concepts</h1>
+    <p>Four directions, all built as real geometric shapes (not illustration) so they hold up at both app-icon size and tiny nav-bar size. Each card shows the mark at 96px and at 30px so you can judge legibility small, not just big.</p>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="sizes">
+        <div class="at"><div class="markA"></div><span>96px</span></div>
+        <div class="at"><div class="markA small"></div><span>30px</span></div>
+      </div>
+      <div class="label">Torn stub</div>
+      <div class="note">A literal torn-off ticket/receipt stub. Direct match for the name &mdash; no explaining required.</div>
+    </div>
+
+    <div class="card">
+      <div class="sizes">
+        <div class="at">
+          <div class="markB">
+            <div class="shape"></div>
+            <svg viewBox="0 0 96 96"><path d="M30 50 L44 64 L70 34" fill="none" stroke="#F5F9FF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span>96px</span>
+        </div>
+        <div class="at">
+          <div class="markB small">
+            <div class="shape"></div>
+            <svg viewBox="0 0 96 96"><path d="M30 50 L44 64 L70 34" fill="none" stroke="#F5F9FF" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <span>30px</span>
+        </div>
+      </div>
+      <div class="label">Torn stub + check</div>
+      <div class="note">Same shape, with the confirmation checkmark from the scan screen built in &mdash; ties the mark to the app's one signature moment.</div>
+    </div>
+
+    <div class="card">
+      <div class="sizes">
+        <div class="at">
+          <div class="markC"><div class="dots"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+          <span>96px</span>
+        </div>
+        <div class="at">
+          <div class="markC small"><div class="dots"><i></i><i></i><i></i><i></i></div></div>
+          <span>30px</span>
+        </div>
+      </div>
+      <div class="label">Perforated edge</div>
+      <div class="note">Softer, rounded-square version &mdash; a dotted perforation line stands in for the tear instead of a jagged cut.</div>
+    </div>
+
+    <div class="card">
+      <div class="sizes">
+        <div class="at"><div class="markD"><span>S</span></div><span>96px</span></div>
+        <div class="at"><div class="markD small"><span>S</span></div><span>30px</span></div>
+      </div>
+      <div class="label">Monogram</div>
+      <div class="note">Abstract fallback &mdash; cleaner at a glance, but loses the direct tie to the name the other three have.</div>
+    </div>
+  </div>
+
+  <div class="lockup">
+    <div class="row">
+      <div class="markA"></div>
+      <div class="word">Stub</div>
+    </div>
+    <div class="tag">Snap the receipt. Keep the stub.</div>
+    <span class="cap">Wordmark lockup &mdash; option A</span>
+  </div>
+</div>

@@ -1,0 +1,11 @@
+# Generates iOS + Android launcher icons from assets/icon/icon.png.
+# Source is rendered by tool/generate_icon_test.dart from StubLogo's exact
+# geometry (DESIGN.md §7) — regenerate that PNG first if the mark ever
+# changes, then re-run: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  # Icon art is a fully opaque square (dark backplate, no transparency) —
+  # required for iOS, which rejects/strips alpha on launcher icons.
+  remove_alpha_ios: true

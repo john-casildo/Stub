@@ -1,0 +1,10 @@
+app/build/
+app/.dart_tool/
+app/ios/Pods/
+app/ios/.symlinks/
+app/ios/Flutter/ephemeral/
+app/android/.gradle/
+app/*.iml
+app/.idea/
+.superpowers/
+*.DS_Store

@@ -1,0 +1,38 @@
+=== 2_grocery_receipt.jpeg — anchor-overlap reconstruction ===
+• 1a
+Cedula: 3101809607   |   Correo:suertemvp@gnail.com   |   +. Pago:Efectivo - Cond. Venta:Contado   |   Telefono: 21015790
+Clave: 505260426003101809607001000070400000   |   #.Elec: 00100007040000068731   |   Doc#: 082955 #Fac:68731
+recha: 26-04-2026 Hora: 16:00:10   |   58731127748392
+Moneda : Colones   |   TCambio 460.00
+Cliente: PUBLICO GENERAL
+Can P.Unit   |   Total
+aceite aceitico 450ml 81040   |   Articulo   |   670.00 S
+670.00
+tang manzana 13g   |   225.00   |   1125.00 G
+5
+tang te limon 13g   |   225.00   |   225.00 G
+2pack atun gomes   |   da costa   |   trocitos 140g 26   |   1180.00 S
+1180.00
+espagueti lucema   |   #7 250g   |   1270.00 S   |   no
+2   |   635.00
+cepillo dental colgate twister   |   1300.00   |   1300.00 S
+1
+salchichon criollo franks   |   500g
+1455.00   |   1455.00 S
+mantequilla c/sal 115g dp   |   15000594
+1555.00   |   1555.00 G
+badia sazon completa 98g
+1880.00   |   1880.00 G
+huevo
+1300.00   |   1300.00 G
+SubTotal:¢   |   11,201.79
+IVA:¢   |   758.21
+Total: ¢   |   Descuento: ¢   |   0.00
+Efectivo:¢   |   11,960.00
+Vuelto: ¢   |   20,000.00
+8,040.00
+Resumen de Impuesto   |   G 13
+5384.96   |   700.04
+S   |   1   |   5816.83   |   58.17
+Atendido Portadmin Caja#:caja2
+Resolucion Mit-DGT-RES-0027-2024 del 13/11/2021   |   Version 4.4

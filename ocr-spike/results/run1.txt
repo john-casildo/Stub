@@ -1,0 +1,273 @@
+=== 1_bank_transfer_receipt.jpeg ===
+Time: 0.66s | Lines: 32
+---
+[1.00] Comprobante de transacción
+[1.00] Banco Nacional
+[1.00] Joyeria y Relojería Marda Gabriela (Mercado)
+[0.50] ALAJUELA , ALAJUELA, ALAJUELA
+[1.00] Transferencias
+[1.00] Transferencia electrónica de fondos
+[1.00] Fecha del pago:
+[1.00] .....13/07/2026 04:10:09
+[1.00] Número de comprobante:
+[1.00] Monto debitado:
+[1.00] . 50,000.00 Colones
+[1.00] Cuenta acreditada:
+[1.00] CR80 0151 1122 0010 6574
+[1.00] A nombre de: RICHARDS WHITE NEVILLE JUNIOR
+[1.00] Monto acreditado: .....50,000.00 Colones
+[1.00] Nombre del depositante: JOHN ERICKSON CASILD
+[1.00] Identificación del depositante: 155855311301
+[1.00] Concepto:
+[0.50] . PAGO
+[1.00] Sin costo de comisión, en caso de
+[1.00] tener
+[1.00] un cobro adicional favor notificarlo al
+[1.00] 2212-2000 con la Contraloría de Servicios
+[1.00] establecimiento
+[1.00] corresponsal
+[1.00] bancario del
+[1.00] Nacional, quien es plenamente responsable
+[1.00] frente a los clientes por las operaciones
+[1.00] servicios prestados por medio del BN
+[1.00] Servicios.
+[1.00] BN-SERVICIOS
+[1.00] JUNTOS SOMOS PROGRESO!
+
+=== 2_grocery_receipt.jpeg ===
+Time: 0.72s | Lines: 78
+---
+[0.30] • 1a
+[1.00] Cedula: 3101809607
+[0.50] Correo:suertemvp@gnail.com
+[1.00] Telefono: 21015790
+[0.50] +. Pago:Efectivo - Cond. Venta:Contado
+[0.50] Doc#: 082955 #Fac:68731
+[1.00] #.Elec: 00100007040000068731
+[1.00] Clave: 505260426003101809607001000070400000
+[1.00] 58731127748392
+[1.00] recha: 26-04-2026 Hora: 16:00:10
+[1.00] Moneda : Colones
+[0.50] TCambio 460.00
+[1.00] Cliente: PUBLICO GENERAL
+[1.00] Articulo
+[0.50] Can P.Unit
+[1.00] Total
+[1.00] aceite aceitico 450ml 81040
+[1.00] 670.00
+[1.00] 670.00 S
+[1.00] tang manzana 13g
+[0.50] 5
+[1.00] 225.00
+[1.00] tang te limon 13g
+[1.00] 225.00
+[0.50] 2pack atun gomes
+[1.00] da costa
+[1.00] 1180.00
+[0.50] espagueti lucema
+[1.00] #7 250g
+[0.50] 2
+[1.00] 635.00
+[1.00] cepillo dental colgate twister
+[0.50] 1
+[1.00] 1300.00
+[1.00] salchichon criollo franks
+[1.00] 500g
+[1.00] 1455.00
+[1.00] mantequilla c/sal 115g dp
+[1.00] 1555.00
+[1.00] badia sazon completa 98g
+[1.00] 1880.00
+[1.00] 1125.00 G
+[1.00] 225.00 G
+[1.00] trocitos 140g 26
+[1.00] 1180.00 S
+[1.00] 1270.00 S
+[1.00] 1300.00 S
+[1.00] 1455.00 S
+[1.00] 15000594
+[1.00] 1555.00 G
+[1.00] 1880.00 G
+[1.00] huevo
+[1.00] 1300.00
+[1.00] 1300.00 G
+[0.50] SubTotal:¢
+[1.00] 11,201.79
+[0.50] IVA:¢
+[1.00] 758.21
+[1.00] Descuento: ¢
+[0.50] Total: ¢
+[1.00] 0.00
+[1.00] 11,960.00
+[1.00] Efectivo:¢
+[1.00] Vuelto: ¢
+[1.00] 20,000.00
+[1.00] 8,040.00
+[1.00] Resumen de Impuesto
+[0.50] G 13
+[1.00] 5384.96
+[1.00] 700.04
+[1.00] S
+[0.50] 1
+[1.00] 5816.83
+[1.00] 58.17
+[0.50] Atendido Portadmin Caja#:caja2
+[1.00] Resolucion Mit-DGT-RES-0027-2024 del 13/11/2021
+[1.00] Version 4.4
+[1.00] no
+
+=== 3_western_union_receipt.jpeg ===
+Time: 0.69s | Lines: 63
+---
+[1.00] WesternUnion \WU
+[1.00] To Send - Customer Copy
+[1.00] SENDER: BRIDGETT MELANIA MONROE DE
+[1.00] CASILDO
+[1.00] Address: 1 MARATHON ESTATES, NASSAU,
+[1.00] 1242, BHS
+[1.00] Telephone: 8247826
+[1.00] ID Type: Passport
+[1.00] ID No: C02048496
+[1.00] WU Card Number: 492051748
+[1.00] Transaction Points :
+[1.00] Points balance:
+[1.00] RECEIVER: JOHN ERICKSON CASILDO
+[1.00] MONROE
+[1.00] WIll Receiver have valid ID ?
+[1.00] Yes
+[1.00] No
+[1.00] Test Question:
+[1.00] Answer:
+[1.00] Optional Services: MONEY IN MINUTES
+[1.00] Effective on January 1, 2022 the 10% VAT will be
+[1.00] applied on allinternational Outbound money
+[1.00] transfers.
+[1.00] Date & Time: 04-27-2026 04:44 PM EDT
+[1.00] Agent Name: MONEYMAX MARATHON MALL,
+[1.00] MARATHON MALL
+[1.00] Operator ID: FGZ
+[1.00] Destination: Costa Rica
+[0.30] MTCN :
+[1.00] Collection Currency:
+[1.00] 217-950-4982
+[1.00] Bahamian Dollar
+[1.00] Amount:
+[1.00] Send Charge:
+[1.00] Message Charge:
+[1.00] Delivery Charge:
+[1.00] Promotion code:
+[1.00] VAT - TIN #103971584:
+[1.00] Foreign Exchange Fee:
+[1.00] Government Stamp Tax:
+[1.00] 200.00
+[1.00] 6.00
+[1.00] 0.60
+[1.00] 2.50
+[1.00] 3.00
+[1.00] 212.10
+[1.00] TOTAL:
+[1.00] Payout Amount:
+[1.00] Costa Rican Colon
+[1.00] 85,430.00
+[1.00] 8.10
+[1.00] Total Tax:
+[1.00] 427.128625
+[1.00] Exchange Rate:
+[1.00] BY SIGNING THIS DOCUMENT YOU
+[1.00] 1. EXPRESSLY CONSENT TO THE TRANSFER OF YOUR
+[1.00] PERSONAL. DATA TO WESTERN UNION AND
+[1.00] AFFILIATES IN COUNTRIES LIKE THE US. FOR THE
+[1.00] PURPOSE OF PROVIDING THE MONEY TRANSFER
+[1.00] SERVICE AND UNDERTAKING TIF ADDITIONAL, DATA
+[1.00] PROCESSING ACTIVITIES SPECIFIED IN THE DATA
+[0.50] TRON
+[1.00] AND
+
+=== 4_bank_voucher_email.png ===
+Time: 0.65s | Lines: 40
+---
+[1.00] 10:00
+[1.00] <
+[1.00] Voucher Digital
+[0.50] BC
+[1.00] BN Contacto Digital
+[1.00] To You
+[1.00] 4 Aug
+[0.50] /IBN
+[1.00] Estimado señor(a): CASILDO MONROE JOHN ERICKSON
+[1.00] Reciba un cordial saludo de parte del Banco Nacional.
+[1.00] Por este medio le hacemos Ilegar el comprobante de
+[1.00] Compra realizada en AUTO MERCADO ALAJUELA
+[1.00] ALAJUELA CRI el 4 de Agosto de 2026 a las 7:08 p.m.
+[1.00] AUTO MERCADO ALAJUELA ALAJUELA CRI
+[1.00] Ago 4, 2026 - 7:08 p.m.
+[1.00] MASTERCARD
+[1.00] NRO. AUT:
+[1.00] REF:
+[1.00] TOTAL:
+[1.00] ***
+[1.00] ****9666
+[1.00] 414444
+[1.00] 14719269
+[1.00] CRC 2920,00
+[1.00] Estimado cliente, esta notificación es generada de forma automática
+[1.00] de acuerdo con lo establecido por el Banco Central de Costa Rica, en
+[1.00] su Reglamento del Sistema de Tarjetas de Pago, por lo que
+[1.00] agradecemos no responder este correo. Con el fin de brindarle una
+[1.00] mejor atención, le solicitamos que las consultas referentes a tarjetas
+[1.00] de crádito y dábito coan diriaidac a nuactro CENTRO ESDECIALIZADO
+[1.00] S Reply
+[1.00] •••
+[1.00] on
+[1.00] nal
+[1.00] Mail
+[0.50] : 6
+[1.00] Calendar
+[1.00] 00
+[1.00] 00
+[1.00] Apps
+
+=== 5_bank_voucher_email2.png ===
+Time: 0.66s | Lines: 40
+---
+[1.00] 10:00
+[1.00] <
+[1.00] Voucher Digital
+[0.50] BC
+[1.00] BN Contacto Digital
+[1.00] To You
+[1.00] 31 Jul
+[0.50] /IBN
+[1.00] Estimado señor(a): CASILDO MONROE JOHN ERICKSON
+[1.00] Reciba un cordial saludo de parte del Banco Nacional.
+[1.00] Por este medio le hacemos Ilegar el comprobante de
+[1.00] Compra realizada en CINEMARK COSTA RICA ALAJUELA
+[1.00] CRI el 31 de Julio de 2026 a las 2:03 p.m.
+[1.00] CINEMARK COSTA RICA ALAJUELA CRI
+[1.00] Jul 31, 2026 - 2:03 p.m.
+[1.00] MASTERCARD
+[1.00] NRO. AUT:
+[1.00] REF:
+[1.00] TOTAL:
+[1.00] ****
+[1.00] ****9666
+[1.00] 133031
+[1.00] 53725823
+[1.00] CRC 5960,00
+[1.00] Estimado cliente, esta notificación es generada de forma automática
+[1.00] de acuerdo con lo establecido por el Banco Central de Costa Rica, en
+[1.00] su Reglamento del Sistema de Tarjetas de Pago, por lo que
+[1.00] agradecemos no responder este correo. Con el fin de brindarle una
+[1.00] mejor atención, le solicitamos que las consultas referentes a tarjetas
+[1.00] de crádito y dábito coan diriaidac a nuactro CENTRO ESDECIALIZADO
+[1.00] S Reply
+[1.00] •••
+[1.00] on
+[1.00] nal
+[1.00] Mail
+[0.50] : 6
+[1.00] Calendar
+[1.00] 00
+[1.00] 00
+[1.00] Apps
+
