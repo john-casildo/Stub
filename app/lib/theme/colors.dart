@@ -39,7 +39,8 @@ class StubColors {
   static const gradSecondDark = Color(0xFF34F5D0);
 
   /// The one decorative gradient ("the pop") — see DESIGN.md §5 for exactly
-  /// which elements this is allowed on. Never use it on a button.
+  /// which elements this is allowed on. As of DESIGN.md §4/§5, every blue
+  /// button uses this too — "never on a button" is no longer the rule.
   static LinearGradient gradPop(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
     return LinearGradient(
