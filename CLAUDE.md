@@ -14,15 +14,32 @@ it.
 | `mockups.html` (repo root) | The 7-screen HTML mockup, published as artifact "Stub" — the visual reference implementation |
 | `logo-concepts.html` (repo root) | The 4 logo directions explored before picking torn-stub-+-check, published as artifact "Stub Marks" |
 | `app/` | The real Flutter project root (`pubspec.yaml`, `lib/`, `ios/`, `android/`) |
-| `app/lib/main.dart` | App entry point — Supabase init, theme wiring, temporary check screen (not real UI yet) |
+| `app/lib/main.dart` | App entry point — Supabase init, theme wiring, gates on LockScreen before showing RootShell |
 | `app/lib/theme/colors.dart` | Every color token, copied from DESIGN.md §2 — never invent a color elsewhere |
 | `app/lib/theme/text.dart` | The 3-font system (Archivo/Domine/Unbounded) from DESIGN.md §1 |
 | `app/lib/theme/app_theme.dart` | Wires colors.dart + text.dart into Flutter's light/dark ThemeData |
+| `app/lib/config/supabase_config.dart` | Supabase URL + publishable key (client-safe; never put a secret key here) |
+| `app/lib/models/transaction.dart` | `Transaction`, `TransactionSource` — transaction models with category and amount |
+| `app/lib/models/category_spend.dart` | `CategorySpend` — aggregated spend by category for dashboard |
+| `app/lib/models/budget_limit.dart` | `BudgetLimit` — budget cap and alert threshold per category |
 | `app/lib/widgets/stub_button.dart` | `StubButton` — Add/Save variant button, see Component inventory below |
 | `app/lib/widgets/stub_logo.dart` | `StubLogo` — the torn-stub-+-check mark, DESIGN.md §7 |
-| `app/lib/config/supabase_config.dart` | Supabase URL + publishable key (client-safe; never put a secret key here) |
-| `app/lib/screens/` | Empty so far — real screens go here as they're ported from mockups.html |
-| `app/test/widget_test.dart` | Smoke test — expand as real screens replace the check screen |
+| `app/lib/widgets/stub_icon.dart` | `StubIcon`, `StubIcons` — transaction source icons (receipt/payment/bank) with badges |
+| `app/lib/widgets/stub_card.dart` | `StubCard` — reusable card surface for dashboard, category rows, transaction tiles |
+| `app/lib/widgets/stub_chip.dart` | `StubChip` — category filter chip with active/gradient state |
+| `app/lib/widgets/stub_field_row.dart` | `StubFieldRow` — label + value pair, used in Edit Entry and Manual Entry screens |
+| `app/lib/widgets/stub_progress_ring.dart` | `StubProgressRing` — circular progress ring, shared between dashboard hero and widget |
+| `app/lib/widgets/stub_progress_bar.dart` | `StubProgressBar` — linear progress bar with over-budget warning state |
+| `app/lib/widgets/stub_transaction_tile.dart` | `StubTransactionTile` — list row for a single transaction (icon, description, amount, date) |
+| `app/lib/widgets/stub_bottom_nav.dart` | `StubBottomNav`, `StubNavItem` — bottom navigation bar with 3 tabs (Ledger/Scan/Budgets) + round scan button |
+| `app/lib/screens/root_shell.dart` | `RootShell` — top-level navigation shell, wires LedgerScreen/ScanScreen/BudgetsScreen via StubBottomNav |
+| `app/lib/screens/ledger_screen.dart` | `LedgerScreen` — transaction list with category filtering and sample data |
+| `app/lib/screens/scan_screen.dart` | `ScanScreen` — camera placeholder for OCR pipeline (camera/parsing wired, edit entry flow wired) |
+| `app/lib/screens/edit_entry_screen.dart` | `EditEntryScreen` — correct/review transaction details with camera re-capture |
+| `app/lib/screens/manual_entry_screen.dart` | `ManualEntryScreen` — manual transaction entry form (built and tested, no UI trigger wired yet) |
+| `app/lib/screens/budgets_screen.dart` | `BudgetsScreen` — budget overview dashboard with categories and progress rings |
+| `app/lib/screens/lock_screen.dart` | `LockScreen` — app unlock flow, real entry point before RootShell |
+| `app/test/widget_test.dart` | Smoke test — expanded with tests for all 6 real screens |
 | `app/tool/generate_icon_test.dart` | Renders `StubLogo` to `assets/icon/icon.png` for `flutter_launcher_icons`; re-run if the mark changes |
 | `app/supabase/config.toml` | Supabase CLI project config (linked to `jlygdlftvvgmekjcawgr`) |
 | `ocr-spike/` (repo root) | The OCR accuracy spike — Swift scripts, sample images, raw results. Findings are already summarized in this file's "OCR/parsing spike" section below; only open the raw folder if you need something beyond that summary. |
@@ -80,15 +97,7 @@ Flutter SDK installed at `~/development/flutter`, on PATH via `~/.zshrc`.
 - `lib/screens/` — one file per screen, ported from `mockups.html` one at a
   time
 
-**Status**: theme + `StubButton` (Add/Save variants) + `StubLogo` (torn stub
-+ check, DESIGN.md §7) all wired and verified (`flutter analyze` clean,
-tests passing). Real app icon generated and installed for both iOS and
-Android via `tool/generate_icon_test.dart` (renders `StubLogo`'s exact
-geometry to `assets/icon/icon.png`) + `flutter_launcher_icons` — re-run both
-if the mark ever changes. iOS build confirmed working end to end
-(`flutter build ios --debug --no-codesign` succeeds). No real screens
-ported yet — `main.dart` currently shows a temporary check screen, not the
-real ledger UI.
+**Status**: theme + all reusable components (`StubButton`, `StubLogo`, `StubIcon`, `StubCard`, `StubChip`, `StubFieldRow`, `StubProgressRing`, `StubProgressBar`, `StubTransactionTile`, `StubBottomNav`/`StubNavItem`) wired and verified (`flutter analyze` clean, 17 tests passing). All 6 real screens (Ledger, Scan, Edit Entry, Manual Entry, Budgets, Lock) ported from mockups and wired via `RootShell` navigation shell. `main.dart` now gates on `LockScreen` before showing the real app. Real app icon generated and installed for both iOS and Android via `tool/generate_icon_test.dart` (renders `StubLogo`'s exact geometry to `assets/icon/icon.png`) + `flutter_launcher_icons`. iOS build confirmed working end to end (`flutter build ios --debug --no-codesign` succeeds). Data is sample/static pending Supabase schema design and real camera/OCR pipeline wiring. **Open item**: `ManualEntryScreen` is built and tested in isolation but has no UI trigger wired yet (no button/gesture opens it from the main UI) — requires explicit design decision on where "add a cash transaction" lives in the navigation.
 
 ## Backend/database: Supabase
 
@@ -270,14 +279,15 @@ everywhere that pattern appears.**
 |---|---|---|
 | Primary button | `.cta` (mockup) / `StubButton` (`lib/widgets/stub_button.dart`) | `StubButtonVariant.add` (blue), `StubButtonVariant.save` (green) |
 | Destructive text link | `.danger-link` | red |
-| Filter/category chip | `.chip` | `.chip.active` (gradient fill) |
-| Field row (label + value) | `.field-row` | used in Edit entry and Manual entry |
-| Progress bar | `.bar-track` / `.bar-fill` | `.bar-fill.warn-fill` (over-budget, solid amber instead of gradient) |
-| Progress ring | `.ring` (SVG, `.track` + `.fill`) | shared between dashboard hero and widget |
-| Card surface | `.surface`-based cards (`.hero-total`, `.categories`, list items) | |
-| Bottom nav tab | `.tab` | `.tab.active`, `.tab.scan-btn` (round, icon-only) |
-| Transaction/source icon badge | `.src` (icon container) | icon swapped per source (receipt / payment app / bank) — see `DESIGN.md` §7 |
-| Hero numeral (gradient) | `.mono` + gradient override on `.hero-total .amount` / `.widget .wamount` / `.amount-display .big-amt` | the one "pop" number per screen |
+| Filter/category chip | `.chip` (mockup) / `StubChip` (`lib/widgets/stub_chip.dart`) | `.chip.active` (gradient fill) |
+| Field row (label + value) | `.field-row` (mockup) / `StubFieldRow` (`lib/widgets/stub_field_row.dart`) | used in Edit entry and Manual entry screens |
+| Progress bar | `.bar-track` / `.bar-fill` (mockup) / `StubProgressBar` (`lib/widgets/stub_progress_bar.dart`) | `.bar-fill.warn-fill` (over-budget, solid amber instead of gradient) |
+| Progress ring | `.ring` (mockup SVG, `.track` + `.fill`) / `StubProgressRing` (`lib/widgets/stub_progress_ring.dart`) | shared between dashboard hero and widget |
+| Card surface | `.surface`-based cards (mockup) / `StubCard` (`lib/widgets/stub_card.dart`) | `.hero-total`, `.categories`, list items |
+| Bottom nav tab | `.tab` (mockup) / `StubBottomNav` + `StubNavItem` (`lib/widgets/stub_bottom_nav.dart`) | `.tab.active`, `.tab.scan-btn` (round, icon-only) |
+| Transaction/source icon badge | `.src` (mockup) / `StubIcon` + `StubIcons` (`lib/widgets/stub_icon.dart`) | icon swapped per source (receipt / payment app / bank) — see `DESIGN.md` §7 |
+| Transaction list tile | `StubTransactionTile` (`lib/widgets/stub_transaction_tile.dart`) | icon + description + amount + date |
+| Hero numeral (gradient) | `.mono` + gradient override (mockup) on `.hero-total .amount` / `.widget .wamount` / `.amount-display .big-amt` | the one "pop" number per screen |
 | Logo mark | `StubLogo` (`lib/widgets/stub_logo.dart`) | torn stub + check, see DESIGN.md §7 — reuse this everywhere the mark appears (app icon, wordmark, splash), don't redraw the shape |
 
 Before adding a new row to this table, check the list above — the answer is
