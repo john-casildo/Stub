@@ -31,4 +31,36 @@ void main() {
     await tester.tap(find.byKey(const Key('stub-bottom-nav-scan-button')));
     expect(scanTapped, isTrue);
   });
+
+  testWidgets('StubBottomNav settles cleanly after activeIndex changes (crossfade + bump)', (tester) async {
+    var activeIndex = 0;
+    late StateSetter setState;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setter) {
+            setState = setter;
+            return StubBottomNav(
+              items: const [
+                StubNavItem(icon: StubIcons.home, label: 'Home'),
+                StubNavItem(icon: StubIcons.chartBar, label: 'Budgets'),
+                StubNavItem(icon: StubIcons.userCircle, label: 'Profile'),
+              ],
+              activeIndex: activeIndex,
+              onTap: (i) => setter(() => activeIndex = i),
+              onScanTap: () {},
+            );
+          },
+        ),
+      ),
+    );
+
+    setState(() => activeIndex = 1);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Budgets'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+  });
 }

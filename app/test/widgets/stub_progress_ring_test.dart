@@ -12,4 +12,17 @@ void main() {
     expect(size.width, 56);
     expect(size.height, 56);
   });
+
+  testWidgets('StubProgressRing animates from 0 to the target progress on mount', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Center(child: StubProgressRing(progress: 0.674, size: 56))),
+    );
+
+    // Mid-animation and fully settled both render without error.
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(StubProgressRing), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.byType(StubProgressRing), findsOneWidget);
+  });
 }

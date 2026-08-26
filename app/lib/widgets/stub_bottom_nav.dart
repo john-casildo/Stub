@@ -41,23 +41,30 @@ class StubBottomNav extends StatelessWidget {
     Widget buildItem(int index) {
       final item = items[index];
       final active = index == activeIndex;
+
+      final iconAndLabel = Column(
+        key: ValueKey(active),
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          StubIcon(item.icon, size: 18, color: active ? accentStrong : ink30),
+          const SizedBox(height: 4),
+          active
+              ? ShaderMask(
+                  shaderCallback: (rect) => StubColors.gradPop(brightness).createShader(rect),
+                  child: Text(item.label, style: StubText.archivo(fontSize: 11, color: Colors.white).copyWith(height: 1.0)),
+                )
+              : Text(item.label, style: StubText.archivo(fontSize: 11, color: ink30).copyWith(height: 1.0)),
+        ],
+      );
+
       return StubPressable(
         onTap: () => onTap(index),
         child: SizedBox(
           width: 48,
           height: 44,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              StubIcon(item.icon, size: 18, color: active ? accentStrong : ink30),
-              const SizedBox(height: 4),
-              active
-                  ? ShaderMask(
-                      shaderCallback: (rect) => StubColors.gradPop(brightness).createShader(rect),
-                      child: Text(item.label, style: StubText.archivo(fontSize: 11, color: Colors.white).copyWith(height: 1.0)),
-                    )
-                  : Text(item.label, style: StubText.archivo(fontSize: 11, color: ink30).copyWith(height: 1.0)),
-            ],
+          child: _BumpScale(
+            trigger: active,
+            child: AnimatedSwitcher(duration: const Duration(milliseconds: 200), child: iconAndLabel),
           ),
         ),
       );
@@ -84,6 +91,47 @@ class StubBottomNav extends StatelessWidget {
           buildItem(2),
         ],
       ),
+    );
+  }
+}
+
+/// Plays a one-shot scale bump (1.0 -> 1.15 -> 1.0) every time [trigger]
+/// changes value — used to punctuate a bottom-nav item flipping active.
+class _BumpScale extends StatefulWidget {
+  const _BumpScale({required this.trigger, required this.child});
+
+  final Object trigger;
+  final Widget child;
+
+  @override
+  State<_BumpScale> createState() => _BumpScaleState();
+}
+
+class _BumpScaleState extends State<_BumpScale> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 260));
+  late final _scale = TweenSequence<double>([
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.15).chain(CurveTween(curve: Curves.easeOut)), weight: 40),
+    TweenSequenceItem(tween: Tween(begin: 1.15, end: 1.0).chain(CurveTween(curve: Curves.easeIn)), weight: 60),
+  ]).animate(_controller);
+
+  @override
+  void didUpdateWidget(covariant _BumpScale oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trigger != widget.trigger) _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _scale,
+      builder: (context, child) => Transform.scale(scale: _scale.value, child: child),
+      child: widget.child,
     );
   }
 }

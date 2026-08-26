@@ -20,22 +20,29 @@ class StubProgressBar extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final fillWidth = constraints.maxWidth * progress.clamp(0.0, 1.0);
-        return Container(
-          height: height,
-          decoration: BoxDecoration(color: track, borderRadius: BorderRadius.circular(100)),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              width: fillWidth,
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: progress.clamp(0.0, 1.0)),
+          duration: const Duration(milliseconds: 700),
+          curve: Curves.easeOutCubic,
+          builder: (context, animatedProgress, child) {
+            final fillWidth = constraints.maxWidth * animatedProgress;
+            return Container(
               height: height,
-              decoration: BoxDecoration(
-                color: isWarning ? warnColor : null,
-                gradient: isWarning ? null : StubColors.gradPop(brightness),
-                borderRadius: BorderRadius.circular(100),
+              decoration: BoxDecoration(color: track, borderRadius: BorderRadius.circular(100)),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  width: fillWidth,
+                  height: height,
+                  decoration: BoxDecoration(
+                    color: isWarning ? warnColor : null,
+                    gradient: isWarning ? null : StubColors.gradPop(brightness),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );

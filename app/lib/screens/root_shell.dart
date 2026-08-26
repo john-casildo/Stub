@@ -94,8 +94,9 @@ class _RootShellState extends State<RootShell> {
 
   @override
   Widget build(BuildContext context) {
+    final Widget content;
     if (_tabIndex == 1) {
-      return BudgetsScreen(
+      content = BudgetsScreen(
         monthLabel: 'August',
         totalBudgeted: 2400,
         totalSpent: 1488,
@@ -106,22 +107,31 @@ class _RootShellState extends State<RootShell> {
         onScanTap: _openScan,
         onAddCategory: () {},
       );
+    } else {
+      // Tab 2 (Profile) has no screen in the original mockup set — falls
+      // back to Ledger content until a Profile screen is designed. The nav
+      // bar highlight must agree with what's actually on screen, so it's
+      // forced to Home (0) here rather than passed through as Profile (2).
+      content = LedgerScreen(
+        monthLabel: 'August',
+        leftToSpend: 1842.30,
+        leftToSpendFraction: 0.674,
+        categories: _sampleCategories,
+        recent: _sampleRecent,
+        activeNavIndex: _tabIndex == 2 ? 0 : _tabIndex,
+        navItems: _navItems,
+        onNavTap: (i) => setState(() => _tabIndex = i),
+        onScanTap: _openScan,
+        onTransactionTap: _openEditEntry,
+      );
     }
-    // Tab 2 (Profile) has no screen in the original mockup set — falls back
-    // to Ledger content until a Profile screen is designed. The nav bar
-    // highlight must agree with what's actually on screen, so it's forced
-    // to Home (0) here rather than passed through as Profile (2).
-    return LedgerScreen(
-      monthLabel: 'August',
-      leftToSpend: 1842.30,
-      leftToSpendFraction: 0.674,
-      categories: _sampleCategories,
-      recent: _sampleRecent,
-      activeNavIndex: _tabIndex == 2 ? 0 : _tabIndex,
-      navItems: _navItems,
-      onNavTap: (i) => setState(() => _tabIndex = i),
-      onScanTap: _openScan,
-      onTransactionTap: _openEditEntry,
+
+    // Keyed by which screen is showing (not the raw tab index) so Home<->
+    // Profile — which render identical Ledger content — never cross-fades
+    // against itself.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: KeyedSubtree(key: ValueKey(_tabIndex == 1 ? 'budgets' : 'ledger'), child: content),
     );
   }
 }

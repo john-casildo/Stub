@@ -18,12 +18,17 @@ class StubProgressRing extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: CustomPaint(
-        painter: _RingPainter(
-          progress: progress,
-          strokeWidth: strokeWidth,
-          trackColor: isDark ? StubColors.lineDark : StubColors.lineLight,
-          gradient: StubColors.gradPop(brightness),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: progress),
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeOutCubic,
+        builder: (context, animatedProgress, child) => CustomPaint(
+          painter: _RingPainter(
+            progress: animatedProgress,
+            strokeWidth: strokeWidth,
+            trackColor: isDark ? StubColors.lineDark : StubColors.lineLight,
+            gradient: StubColors.gradPop(brightness),
+          ),
         ),
       ),
     );

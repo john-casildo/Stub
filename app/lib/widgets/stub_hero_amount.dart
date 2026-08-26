@@ -18,8 +18,27 @@ class StubHeroAmount extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    return ShaderMask(
-      shaderCallback: (rect) => StubColors.gradPop(brightness).createShader(rect),
+    final isDark = brightness == Brightness.dark;
+    final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
+    final pop = StubColors.gradPop(brightness);
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOut,
+      builder: (context, reveal, child) => ShaderMask(
+        // Wipes the gradient in left-to-right: below `reveal`, the shader
+        // outputs plain `ink` (matching modulate blend against the child's
+        // white text = pass-through), above it, the real gradient colors —
+        // so the number reads immediately, and the gradient "paints on".
+        shaderCallback: (rect) => LinearGradient(
+          begin: pop.begin,
+          end: pop.end,
+          colors: [ink, ink, pop.colors[0], pop.colors[1]],
+          stops: [0, reveal, reveal, 1],
+        ).createShader(rect),
+        child: child,
+      ),
       child: Text(
         formatCurrency(amount),
         style: StubText.unbounded(fontSize: fontSize, color: Colors.white),
