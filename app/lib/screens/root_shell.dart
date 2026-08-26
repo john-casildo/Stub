@@ -94,8 +94,6 @@ class _RootShellState extends State<RootShell> {
 
   @override
   Widget build(BuildContext context) {
-    // Tab 2 (Profile) has no screen in the original mockup set — falls
-    // back to Ledger until a Profile screen is designed.
     if (_tabIndex == 1) {
       return BudgetsScreen(
         monthLabel: 'August',
@@ -109,13 +107,17 @@ class _RootShellState extends State<RootShell> {
         onAddCategory: () {},
       );
     }
+    // Tab 2 (Profile) has no screen in the original mockup set — falls back
+    // to Ledger content until a Profile screen is designed. The nav bar
+    // highlight must agree with what's actually on screen, so it's forced
+    // to Home (0) here rather than passed through as Profile (2).
     return LedgerScreen(
       monthLabel: 'August',
       leftToSpend: 1842.30,
       leftToSpendFraction: 0.674,
       categories: _sampleCategories,
       recent: _sampleRecent,
-      activeNavIndex: _tabIndex,
+      activeNavIndex: _tabIndex == 2 ? 0 : _tabIndex,
       navItems: _navItems,
       onNavTap: (i) => setState(() => _tabIndex = i),
       onScanTap: _openScan,
