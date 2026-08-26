@@ -33,7 +33,7 @@ class LockScreen extends StatelessWidget {
                 child: Center(child: StubIcon(StubIcons.lock, size: 30, color: paperText.withValues(alpha: 0.85))),
               ),
               const SizedBox(height: 22),
-              Text('Stub is locked', style: StubText.domine(fontSize: 20, color: paperText)),
+              Text('Stub is locked', style: StubText.archivo(fontSize: 20, fontWeight: FontWeight.w700, color: paperText)),
               const SizedBox(height: 6),
               Text('Your ledger, kept private', style: StubText.archivo(fontSize: 13, color: paperText.withValues(alpha: 0.55))),
               const SizedBox(height: 30),
