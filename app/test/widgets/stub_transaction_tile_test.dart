@@ -1,0 +1,23 @@
+// app/test/widgets/stub_transaction_tile_test.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:stub/models/transaction.dart';
+import 'package:stub/widgets/stub_transaction_tile.dart';
+
+void main() {
+  testWidgets('StubTransactionTile shows merchant, source, and amount', (tester) async {
+    const transaction = Transaction(
+      merchant: 'Corner Market',
+      amount: 18.42,
+      category: 'Groceries',
+      source: TransactionSource.receipt,
+      dateLabel: 'Today',
+    );
+    await tester.pumpWidget(
+      const MaterialApp(home: StubTransactionTile(transaction: transaction)),
+    );
+    expect(find.text('Corner Market'), findsOneWidget);
+    expect(find.textContaining('RECEIPT'), findsOneWidget);
+    expect(find.textContaining('18.42'), findsOneWidget);
+  });
+}
