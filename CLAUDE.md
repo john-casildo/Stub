@@ -39,7 +39,10 @@ it.
 | `app/lib/screens/manual_entry_screen.dart` | `ManualEntryScreen` — manual transaction entry form (built and tested, no UI trigger wired yet) |
 | `app/lib/screens/budgets_screen.dart` | `BudgetsScreen` — budget overview dashboard with categories and progress rings |
 | `app/lib/screens/lock_screen.dart` | `LockScreen` — app unlock flow, real entry point before RootShell |
-| `app/test/widget_test.dart` | Smoke test — expanded with tests for all 6 real screens |
+| `app/test/widget_test.dart` | App-level smoke test — boots locked, unlocks into the real ledger |
+| `app/test/models_test.dart` | Tests for `Transaction`/`CategorySpend`/`BudgetLimit` |
+| `app/test/widgets/*_test.dart` | One test file per reusable widget (`stub_bottom_nav`, `stub_card`, `stub_chip`, `stub_field_row`, `stub_icon`, `stub_progress_bar`, `stub_progress_ring`, `stub_transaction_tile`) — same basename as the widget under `lib/widgets/` |
+| `app/test/screens/*_test.dart` | One test file per screen (`budgets_screen`, `edit_entry_screen`, `ledger_screen`, `lock_screen`, `manual_entry_screen`, `root_shell`, `scan_screen`) — same basename as the screen under `lib/screens/` |
 | `app/tool/generate_icon_test.dart` | Renders `StubLogo` to `assets/icon/icon.png` for `flutter_launcher_icons`; re-run if the mark changes |
 | `app/supabase/config.toml` | Supabase CLI project config (linked to `jlygdlftvvgmekjcawgr`) |
 | `ocr-spike/` (repo root) | The OCR accuracy spike — Swift scripts, sample images, raw results. Findings are already summarized in this file's "OCR/parsing spike" section below; only open the raw folder if you need something beyond that summary. |
