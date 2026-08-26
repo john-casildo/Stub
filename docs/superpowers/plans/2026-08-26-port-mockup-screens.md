@@ -612,7 +612,7 @@ import 'package:stub/widgets/stub_progress_ring.dart';
 void main() {
   testWidgets('StubProgressRing renders at the given size', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: StubProgressRing(progress: 0.674, size: 56)),
+      const MaterialApp(home: Center(child: StubProgressRing(progress: 0.674, size: 56))),
     );
     final size = tester.getSize(find.byType(StubProgressRing));
     expect(size.width, 56);
@@ -735,7 +735,7 @@ void main() {
   testWidgets('StubProgressBar renders at the given height', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: SizedBox(width: 200, child: StubProgressBar(progress: 0.71, height: 7)),
+        home: Center(child: SizedBox(width: 200, child: StubProgressBar(progress: 0.71, height: 7))),
       ),
     );
     final size = tester.getSize(find.byType(StubProgressBar));
@@ -1364,6 +1364,7 @@ import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_card.dart';
+import '../widgets/stub_icon.dart';
 
 class ScanScreen extends StatelessWidget {
   const ScanScreen({
@@ -1394,7 +1395,7 @@ class ScanScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: onClose),
+        leading: IconButton(icon: StubIcon(StubIcons.x, size: 18, color: ink), onPressed: onClose),
       ),
       body: SafeArea(
         child: Padding(
@@ -1522,6 +1523,7 @@ import '../theme/text.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_chip.dart';
 import '../widgets/stub_field_row.dart';
+import '../widgets/stub_icon.dart';
 
 class EditEntryScreen extends StatefulWidget {
   const EditEntryScreen({
@@ -1563,7 +1565,7 @@ class _EditEntryScreenState extends State<EditEntryScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onClose),
+        leading: IconButton(icon: StubIcon(StubIcons.x, size: 18, color: ink), onPressed: widget.onClose),
         title: Text('Edit entry', style: StubText.archivo(fontSize: 16, fontWeight: FontWeight.w700, color: ink)),
         centerTitle: true,
       ),
@@ -1686,6 +1688,7 @@ import '../theme/text.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_chip.dart';
 import '../widgets/stub_field_row.dart';
+import '../widgets/stub_icon.dart';
 
 class ManualEntryScreen extends StatefulWidget {
   const ManualEntryScreen({
@@ -1726,7 +1729,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onClose),
+        leading: IconButton(icon: StubIcon(StubIcons.x, size: 18, color: ink), onPressed: widget.onClose),
         title: Text('New entry', style: StubText.archivo(fontSize: 16, fontWeight: FontWeight.w700, color: ink)),
         centerTitle: true,
       ),
@@ -1812,6 +1815,12 @@ class _MerchantDialog extends StatefulWidget {
 
 class _MerchantDialogState extends State<_MerchantDialog> {
   late final _controller = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2187,34 +2196,6 @@ git commit -m "feat: add LockScreen"
 
 ```dart
 // app/test/screens/root_shell_test.dart
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:stub/screens/root_shell.dart';
-
-void main() {
-  testWidgets('RootShell starts on the ledger and switches to budgets on tab tap', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: RootShell()));
-    expect(find.text('LEFT TO SPEND'), findsOneWidget);
-
-    await tester.tap(find.text('Budgets'));
-    await tester.pump();
-    expect(find.text('BUDGETED THIS MONTH'), findsOneWidget);
-  });
-
-  testWidgets('RootShell opens ScanScreen from the nav scan button', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: RootShell()));
-    await tester.tap(find.byIcon(Icons.circle).hitTestable().first.evaluate().isEmpty
-        ? find.text('Home') // fallback no-op, real tap below targets the scan button directly
-        : find.text('Home'));
-    // Scan button has no text label — find it by its distinctive callback wiring instead.
-  });
-}
-```
-
-Given the scan button has no text/key to target directly yet, replace the second test with a simpler, real assertion:
-
-```dart
-// app/test/screens/root_shell_test.dart (final version)
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stub/screens/root_shell.dart';
