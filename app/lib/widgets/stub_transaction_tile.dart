@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import '../util/currency.dart';
 import 'stub_icon.dart';
 
 class StubTransactionTile extends StatelessWidget {
@@ -65,7 +66,7 @@ class StubTransactionTile extends StatelessWidget {
                 ],
               ),
             ),
-            Text('-\$${transaction.amount.toStringAsFixed(2)}', style: StubText.unbounded(fontSize: 14, color: ink)),
+            Text('-${formatCurrency(transaction.amount)}', style: StubText.unbounded(fontSize: 14, color: ink)),
           ],
         ),
       ),

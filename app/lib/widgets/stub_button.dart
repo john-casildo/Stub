@@ -25,22 +25,28 @@ class StubButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
     final bool isSave = variant == StubButtonVariant.save;
 
-    final Color background = isSave
-        ? (isDark ? StubColors.goodDark : StubColors.goodLight)
-        : (isDark ? StubColors.accentDark : StubColors.accentLight);
     final Color foreground = isSave
         ? (isDark ? StubColors.onGoodDark : StubColors.onGoodLight)
         : (isDark ? StubColors.onAccentDark : StubColors.onAccentLight);
 
-    return SizedBox(
+    // `add` is blue, and DESIGN.md requires blue to always be the gradient
+    // (never a flat color) — so its background comes from a BoxDecoration
+    // behind a transparent ElevatedButton, not from ElevatedButton's own
+    // (flat-only) backgroundColor.
+    final Color? flatBackground =
+        isSave ? (isDark ? StubColors.goodDark : StubColors.goodLight) : null;
+
+    final button = SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: background,
+          backgroundColor: flatBackground ?? Colors.transparent,
+          shadowColor: Colors.transparent,
           foregroundColor: foreground,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -48,6 +54,16 @@ class StubButton extends StatelessWidget {
         ),
         child: Text(label, style: StubText.archivo(fontSize: 15, fontWeight: FontWeight.w600, color: foreground)),
       ),
+    );
+
+    if (isSave) return button;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: StubColors.gradPop(brightness),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: button,
     );
   }
 }

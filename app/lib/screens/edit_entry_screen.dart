@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import '../util/currency.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_chip.dart';
 import '../widgets/stub_field_row.dart';
@@ -51,13 +52,13 @@ class _EditEntryScreenState extends State<EditEntryScreen> {
         centerTitle: true,
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               StubFieldRow(label: 'Merchant', value: widget.merchant, editable: true),
-              StubFieldRow(label: 'Amount', value: '\$${widget.amount.toStringAsFixed(2)}', mono: true, editable: true),
+              StubFieldRow(label: 'Amount', value: formatCurrency(widget.amount), mono: true, editable: true),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 child: Column(

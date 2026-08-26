@@ -26,7 +26,7 @@ void main() {
         ),
       ),
     );
-    expect(find.textContaining('2400'), findsOneWidget);
+    expect(find.textContaining('2,400.00'), findsOneWidget);
     expect(find.text('Groceries'), findsOneWidget);
     expect(find.text('+ Add a category'), findsOneWidget);
   });

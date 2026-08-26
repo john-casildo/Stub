@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/budget_limit.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import '../util/currency.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_card.dart';
+import '../widgets/stub_hero_amount.dart';
 import '../widgets/stub_progress_bar.dart';
 
 class BudgetsScreen extends StatelessWidget {
@@ -62,7 +64,7 @@ class BudgetsScreen extends StatelessWidget {
                         children: [
                           Text('BUDGETED THIS MONTH', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
                           const SizedBox(height: 6),
-                          Text('\$${totalBudgeted.toStringAsFixed(2)}', style: StubText.unbounded(fontSize: 24, color: ink)),
+                          StubHeroAmount(amount: totalBudgeted, fontSize: 24),
                           const SizedBox(height: 12),
                           StubProgressBar(progress: overallFraction),
                           const SizedBox(height: 8),
@@ -127,7 +129,7 @@ class _BudgetRow extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(budget.name, style: StubText.archivo(fontSize: 14, fontWeight: FontWeight.w600, color: ink)),
-              Text('\$${budget.spent.toStringAsFixed(0)} / \$${budget.limit.toStringAsFixed(0)}', style: StubText.unbounded(fontSize: 13, color: ink)),
+              Text('${formatCurrency(budget.spent)} / ${formatCurrency(budget.limit)}', style: StubText.unbounded(fontSize: 13, color: ink)),
             ],
           ),
           const SizedBox(height: 8),

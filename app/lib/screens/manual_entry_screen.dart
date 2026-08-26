@@ -36,7 +36,8 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
     final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
     final ink30 = ink.withValues(alpha: 0.3);
 
@@ -50,7 +51,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
         centerTitle: true,
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,12 +61,24 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                 child: Column(
                   children: [
                     IntrinsicWidth(
-                      child: TextField(
-                        controller: _amountController,
-                        textAlign: TextAlign.center,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        style: StubText.unbounded(fontSize: 32, color: ink),
-                        decoration: const InputDecoration(border: InputBorder.none, prefixText: '\$'),
+                      // Blue is a gradient everywhere per DESIGN.md, including
+                      // this editable amount — ShaderMask over the whole
+                      // TextField (same technique as stub_bottom_nav.dart's
+                      // active label) so digits, cursor, and the "$" prefix
+                      // all pick up StubColors.gradPop.
+                      child: ShaderMask(
+                        shaderCallback: (rect) => StubColors.gradPop(brightness).createShader(rect),
+                        child: TextField(
+                          controller: _amountController,
+                          textAlign: TextAlign.center,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: StubText.unbounded(fontSize: 32, color: Colors.white),
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            prefixText: '\$',
+                            prefixStyle: StubText.unbounded(fontSize: 32, color: Colors.white),
+                          ),
+                        ),
                       ),
                     ),
                     Text('tap to type an amount', style: StubText.archivo(fontSize: 11, letterSpacing: 0.5, color: ink30)),

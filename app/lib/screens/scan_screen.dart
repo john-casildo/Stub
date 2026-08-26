@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import '../util/currency.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_card.dart';
 import '../widgets/stub_icon.dart';
@@ -23,7 +24,8 @@ class ScanScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
     final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
     final ink50 = ink.withValues(alpha: 0.5);
     final good = isDark ? StubColors.goodDark : StubColors.goodLight;
@@ -42,24 +44,39 @@ class ScanScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              StubCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.check_circle, color: good, size: 28),
-                    const SizedBox(height: 12),
-                    _row('MERCHANT', merchant, ink, ink50),
-                    _row('AMOUNT', '\$${amount.toStringAsFixed(2)}', ink, ink50, mono: true),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: goodBg, borderRadius: BorderRadius.circular(100)),
-                      child: Text(category, style: StubText.archivo(fontSize: 12, fontWeight: FontWeight.w600, color: good)),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  StubCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _row('MERCHANT', merchant, ink, ink50),
+                        _row('AMOUNT', formatCurrency(amount), ink, ink50, mono: true),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: goodBg, borderRadius: BorderRadius.circular(100)),
+                          child: Text(category, style: StubText.archivo(fontSize: 12, fontWeight: FontWeight.w600, color: good)),
+                        ),
+                        const SizedBox(height: 16),
+                        StubButton(label: 'Add to ledger', onPressed: onAddToLedger),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    StubButton(label: 'Add to ledger', onPressed: onAddToLedger),
-                  ],
-                ),
+                  ),
+                  // mockups.html `.parsed-card .stamp`: 58px gradient circle
+                  // overhanging the card's top-right corner.
+                  Positioned(
+                    top: -34,
+                    right: 20,
+                    child: Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(shape: BoxShape.circle, gradient: StubColors.gradPop(brightness)),
+                      child: const Center(child: Icon(Icons.check, color: Colors.white)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

@@ -3,23 +3,12 @@ import '../models/category_spend.dart';
 import '../models/transaction.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import '../util/currency.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_card.dart';
+import '../widgets/stub_hero_amount.dart';
 import '../widgets/stub_progress_ring.dart';
 import '../widgets/stub_transaction_tile.dart';
-
-String _formatCurrency(double amount) {
-  final fixed = amount.toStringAsFixed(2);
-  final parts = fixed.split('.');
-  final whole = parts[0];
-  final buffer = StringBuffer();
-  for (var i = 0; i < whole.length; i++) {
-    final remaining = whole.length - i;
-    if (i > 0 && remaining % 3 == 0) buffer.write(',');
-    buffer.write(whole[i]);
-  }
-  return '${buffer.toString()}.${parts[1]}';
-}
 
 class LedgerScreen extends StatelessWidget {
   const LedgerScreen({
@@ -82,7 +71,7 @@ class LedgerScreen extends StatelessWidget {
                               children: [
                                 Text('LEFT TO SPEND', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
                                 const SizedBox(height: 6),
-                                Text('\$${_formatCurrency(leftToSpend)}', style: StubText.unbounded(fontSize: 26, color: ink)),
+                                StubHeroAmount(amount: leftToSpend, fontSize: 26),
                               ],
                             ),
                           ),
@@ -130,7 +119,7 @@ class _CategoryRow extends StatelessWidget {
           Container(width: 9, height: 9, decoration: BoxDecoration(shape: BoxShape.circle, color: category.color)),
           const SizedBox(width: 10),
           Expanded(child: Text(category.name, style: StubText.archivo(fontSize: 14, color: ink))),
-          Text('\$${_formatCurrency(category.amount)}', style: StubText.unbounded(fontSize: 14, fontWeight: FontWeight.w600, color: ink)),
+          Text(formatCurrency(category.amount), style: StubText.unbounded(fontSize: 14, fontWeight: FontWeight.w600, color: ink)),
         ],
       ),
     );
