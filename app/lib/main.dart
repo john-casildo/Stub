@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
+import 'screens/lock_screen.dart';
+import 'screens/root_shell.dart';
 import 'theme/app_theme.dart';
-import 'theme/text.dart';
-import 'widgets/stub_button.dart';
-import 'widgets/stub_logo.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,45 +25,32 @@ class StubApp extends StatelessWidget {
       theme: StubTheme.light(),
       darkTheme: StubTheme.dark(),
       themeMode: ThemeMode.system,
-      home: const _ThemeCheckScreen(),
+      home: const _LockGate(),
     );
   }
 }
 
-/// Temporary home screen — just proves the theme, fonts, and StubButton
-/// component are wired correctly end to end. Replace with the real ledger
-/// screen once the mockup's screens are ported over one by one.
-class _ThemeCheckScreen extends StatelessWidget {
-  const _ThemeCheckScreen();
+/// Shows the lock screen until unlocked, then the real app. Real Face
+/// ID/biometric wiring (the `local_auth` package is already a dependency)
+/// is separate follow-up work — this just gates on a boolean for now, so
+/// the screen and the navigation shell are both real and testable before
+/// that wiring exists.
+class _LockGate extends StatefulWidget {
+  const _LockGate();
+
+  @override
+  State<_LockGate> createState() => _LockGateState();
+}
+
+class _LockGateState extends State<_LockGate> {
+  bool _unlocked = false;
 
   @override
   Widget build(BuildContext context) {
-    final ink = Theme.of(context).colorScheme.onSurface;
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                children: [
-                  const StubLogo(size: 40),
-                  const SizedBox(width: 10),
-                  Text('Stub', style: StubText.domine(fontSize: 32, color: ink)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text('\$1,842.30', style: StubText.unbounded(fontSize: 28, color: ink)),
-              const SizedBox(height: 32),
-              StubButton(label: 'Add to ledger', onPressed: () {}),
-              const SizedBox(height: 12),
-              StubButton(label: 'Save changes', variant: StubButtonVariant.save, onPressed: () {}),
-            ],
-          ),
-        ),
-      ),
+    if (_unlocked) return const RootShell();
+    return LockScreen(
+      onUnlock: () => setState(() => _unlocked = true),
+      onUsePasscode: () => setState(() => _unlocked = true),
     );
   }
 }
