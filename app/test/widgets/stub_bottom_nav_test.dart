@@ -27,5 +27,8 @@ void main() {
 
     await tester.tap(find.text('Budgets'));
     expect(tappedIndex, 1);
+
+    await tester.tap(find.byKey(const Key('stub-bottom-nav-scan-button')));
+    expect(scanTapped, isTrue);
   });
 }

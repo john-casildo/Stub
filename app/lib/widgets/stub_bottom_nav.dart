@@ -70,6 +70,7 @@ class StubBottomNav extends StatelessWidget {
         children: [
           buildItem(0),
           GestureDetector(
+            key: const Key('stub-bottom-nav-scan-button'),
             onTap: onScanTap,
             child: Container(
               width: 48,
