@@ -6,7 +6,7 @@ import 'package:stub/widgets/stub_progress_ring.dart';
 void main() {
   testWidgets('StubProgressRing renders at the given size', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: StubProgressRing(progress: 0.674, size: 56)),
+      const MaterialApp(home: Center(child: StubProgressRing(progress: 0.674, size: 56))),
     );
     final size = tester.getSize(find.byType(StubProgressRing));
     expect(size.width, 56);
