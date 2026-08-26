@@ -133,6 +133,12 @@ class _MerchantDialogState extends State<_MerchantDialog> {
   late final _controller = TextEditingController(text: widget.initial);
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Merchant name'),
