@@ -6,6 +6,7 @@ import '../widgets/stub_button.dart';
 import '../widgets/stub_chip.dart';
 import '../widgets/stub_field_row.dart';
 import '../widgets/stub_icon.dart';
+import '../widgets/stub_pressable.dart';
 
 class EditEntryScreen extends StatefulWidget {
   const EditEntryScreen({
@@ -82,8 +83,9 @@ class _EditEntryScreenState extends State<EditEntryScreen> {
               StubButton(label: 'Save changes', variant: StubButtonVariant.save, onPressed: () => widget.onSave(_selected)),
               const SizedBox(height: 12),
               Center(
-                child: GestureDetector(
+                child: StubPressable(
                   onTap: widget.onDelete,
+                  ensureMinTapSize: true,
                   child: Text('Delete entry', style: StubText.archivo(fontSize: 13, fontWeight: FontWeight.w600, color: danger)),
                 ),
               ),

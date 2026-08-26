@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
 import 'stub_icon.dart';
+import 'stub_pressable.dart';
 
 class StubNavItem {
   const StubNavItem({required this.icon, required this.label});
@@ -40,7 +41,7 @@ class StubBottomNav extends StatelessWidget {
     Widget buildItem(int index) {
       final item = items[index];
       final active = index == activeIndex;
-      return GestureDetector(
+      return StubPressable(
         onTap: () => onTap(index),
         child: SizedBox(
           width: 48,
@@ -69,7 +70,7 @@ class StubBottomNav extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           buildItem(0),
-          GestureDetector(
+          StubPressable(
             key: const Key('stub-bottom-nav-scan-button'),
             onTap: onScanTap,
             child: Container(

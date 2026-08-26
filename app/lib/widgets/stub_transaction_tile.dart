@@ -4,6 +4,7 @@ import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../util/currency.dart';
 import 'stub_icon.dart';
+import 'stub_pressable.dart';
 
 class StubTransactionTile extends StatelessWidget {
   const StubTransactionTile({super.key, required this.transaction, this.onTap});
@@ -43,7 +44,7 @@ class StubTransactionTile extends StatelessWidget {
     final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
     final surfaceAlt = isDark ? StubColors.surfaceAltDark : StubColors.surfaceAltLight;
 
-    return GestureDetector(
+    return StubPressable(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),

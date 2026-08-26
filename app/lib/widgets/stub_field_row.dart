@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
 import 'stub_icon.dart';
+import 'stub_pressable.dart';
 
 /// Label-over-value row used on Edit Entry and Manual Entry — see the
 /// `.field-row` pattern in DESIGN.md's component inventory (CLAUDE.md).
@@ -35,7 +36,7 @@ class StubFieldRow extends StatelessWidget {
         ? StubText.unbounded(fontSize: 16, color: valueColor ?? ink)
         : StubText.archivo(fontSize: 16, fontWeight: FontWeight.w600, color: valueColor ?? ink);
 
-    return GestureDetector(
+    return StubPressable(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),

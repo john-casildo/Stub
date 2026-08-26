@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import 'stub_pressable.dart';
 
 /// Category filter chip — selected state uses the gradient fill (DESIGN.md
 /// §5: "the active category filter chip" is one of the listed gradient
@@ -21,8 +22,9 @@ class StubChip extends StatelessWidget {
     final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
     final onAccent = isDark ? StubColors.onAccentDark : StubColors.onAccentLight;
 
-    return GestureDetector(
+    return StubPressable(
       onTap: onTap,
+      ensureMinTapSize: true,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
@@ -42,3 +44,4 @@ class StubChip extends StatelessWidget {
     );
   }
 }
+

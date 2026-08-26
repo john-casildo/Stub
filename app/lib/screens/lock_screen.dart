@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../widgets/stub_icon.dart';
+import '../widgets/stub_pressable.dart';
 
 class LockScreen extends StatelessWidget {
   const LockScreen({super.key, required this.onUnlock, required this.onUsePasscode});
@@ -36,7 +37,7 @@ class LockScreen extends StatelessWidget {
               const SizedBox(height: 6),
               Text('Your ledger, kept private', style: StubText.archivo(fontSize: 13, color: paperText.withValues(alpha: 0.55))),
               const SizedBox(height: 30),
-              GestureDetector(
+              StubPressable(
                 onTap: onUnlock,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
@@ -45,8 +46,9 @@ class LockScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              GestureDetector(
+              StubPressable(
                 onTap: onUsePasscode,
+                ensureMinTapSize: true,
                 child: Text('Use passcode', style: StubText.archivo(fontSize: 12, color: paperText.withValues(alpha: 0.45))),
               ),
             ],

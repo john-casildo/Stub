@@ -6,6 +6,7 @@ import '../util/currency.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_card.dart';
 import '../widgets/stub_hero_amount.dart';
+import '../widgets/stub_pressable.dart';
 import '../widgets/stub_progress_bar.dart';
 
 class BudgetsScreen extends StatelessWidget {
@@ -83,7 +84,7 @@ class BudgetsScreen extends StatelessWidget {
                       child: Column(children: [for (final b in budgets) _BudgetRow(budget: b)]),
                     ),
                     const SizedBox(height: 14),
-                    GestureDetector(
+                    StubPressable(
                       onTap: onAddCategory,
                       child: Container(
                         width: double.infinity,

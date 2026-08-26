@@ -32,6 +32,9 @@ it.
 | `app/lib/widgets/stub_progress_bar.dart` | `StubProgressBar` — linear progress bar with over-budget warning state |
 | `app/lib/widgets/stub_transaction_tile.dart` | `StubTransactionTile` — list row for a single transaction (icon, description, amount, date) |
 | `app/lib/widgets/stub_bottom_nav.dart` | `StubBottomNav`, `StubNavItem` — bottom navigation bar with 3 tabs (Home/Budgets/Profile) + a separate fixed round scan button (not one of the 3 tabs) |
+| `app/lib/widgets/stub_hero_amount.dart` | `StubHeroAmount` — big gradient-text currency number (`ShaderMask` + `StubColors.gradPop`), used for every hero amount so blue never renders flat there |
+| `app/lib/widgets/stub_pressable.dart` | `StubPressable` — press feedback (scale+fade) wrapper for tappable widgets, with an optional 44x44 minimum tap-target guarantee; used instead of `InkWell` since most tappable surfaces here have an opaque gradient/solid fill that would hide a Material ripple |
+| `app/lib/util/currency.dart` | `formatCurrency` — shared thousands-separator currency formatter (negative-safe), used by every screen/widget that displays money |
 | `app/lib/screens/root_shell.dart` | `RootShell` — top-level navigation shell; tab-switches LedgerScreen/BudgetsScreen via StubBottomNav, pushes ScanScreen/EditEntryScreen via Navigator.push from the scan button/transaction tap |
 | `app/lib/screens/ledger_screen.dart` | `LedgerScreen` — hero "left to spend" progress ring, per-category spend list, and recent transactions (sample data; no category filtering) |
 | `app/lib/screens/scan_screen.dart` | `ScanScreen` — presentational confirm-card screen; no camera/OCR/parsing wired (deferred — see OCR/parsing spike section) |
@@ -41,8 +44,9 @@ it.
 | `app/lib/screens/lock_screen.dart` | `LockScreen` — app unlock flow, real entry point before RootShell |
 | `app/test/widget_test.dart` | App-level smoke test — boots locked, unlocks into the real ledger |
 | `app/test/models_test.dart` | Tests for `Transaction`/`CategorySpend`/`BudgetLimit` |
-| `app/test/widgets/*_test.dart` | One test file per reusable widget (`stub_bottom_nav`, `stub_card`, `stub_chip`, `stub_field_row`, `stub_icon`, `stub_progress_bar`, `stub_progress_ring`, `stub_transaction_tile`) — same basename as the widget under `lib/widgets/` |
+| `app/test/widgets/*_test.dart` | One test file per reusable widget (`stub_bottom_nav`, `stub_card`, `stub_chip`, `stub_field_row`, `stub_hero_amount`, `stub_icon`, `stub_pressable`, `stub_progress_bar`, `stub_progress_ring`, `stub_transaction_tile`) — same basename as the widget under `lib/widgets/` |
 | `app/test/screens/*_test.dart` | One test file per screen (`budgets_screen`, `edit_entry_screen`, `ledger_screen`, `lock_screen`, `manual_entry_screen`, `root_shell`, `scan_screen`) — same basename as the screen under `lib/screens/` |
+| `app/test/util/currency_test.dart` | Tests for `formatCurrency`, including the negative-amount case |
 | `app/tool/generate_icon_test.dart` | Renders `StubLogo` to `assets/icon/icon.png` for `flutter_launcher_icons`; re-run if the mark changes |
 | `app/supabase/config.toml` | Supabase CLI project config (linked to `jlygdlftvvgmekjcawgr`) |
 | `ocr-spike/` (repo root) | The OCR accuracy spike — Swift scripts, sample images, raw results. Findings are already summarized in this file's "OCR/parsing spike" section below; only open the raw folder if you need something beyond that summary. |
@@ -100,7 +104,7 @@ Flutter SDK installed at `~/development/flutter`, on PATH via `~/.zshrc`.
 - `lib/screens/` — one file per screen, ported from `mockups.html` one at a
   time
 
-**Status**: theme + all reusable components (`StubButton`, `StubLogo`, `StubIcon`, `StubCard`, `StubChip`, `StubFieldRow`, `StubProgressRing`, `StubProgressBar`, `StubTransactionTile`, `StubBottomNav`/`StubNavItem`) wired and verified (`flutter analyze` clean, 17 tests passing). All 6 real screens (Ledger, Scan, Edit Entry, Manual Entry, Budgets, Lock) ported from mockups and wired via `RootShell` navigation shell. `main.dart` now gates on `LockScreen` before showing the real app. Real app icon generated and installed for both iOS and Android via `tool/generate_icon_test.dart` (renders `StubLogo`'s exact geometry to `assets/icon/icon.png`) + `flutter_launcher_icons`. iOS build confirmed working end to end (`flutter build ios --debug --no-codesign` succeeds). Data is sample/static pending Supabase schema design and real camera/OCR pipeline wiring. **Open item**: `ManualEntryScreen` is built and tested in isolation but has no UI trigger wired yet (no button/gesture opens it from the main UI) — requires explicit design decision on where "add a cash transaction" lives in the navigation.
+**Status**: theme + all reusable components (`StubButton`, `StubLogo`, `StubIcon`, `StubCard`, `StubChip`, `StubFieldRow`, `StubProgressRing`, `StubProgressBar`, `StubTransactionTile`, `StubBottomNav`/`StubNavItem`, `StubHeroAmount`, `StubPressable`) wired and verified (`flutter analyze` clean, 26 tests passing). All 6 real screens (Ledger, Scan, Edit Entry, Manual Entry, Budgets, Lock) ported from mockups and wired via `RootShell` navigation shell. `main.dart` now gates on `LockScreen` before showing the real app. Real app icon generated and installed for both iOS and Android via `tool/generate_icon_test.dart` (renders `StubLogo`'s exact geometry to `assets/icon/icon.png`) + `flutter_launcher_icons`. iOS build confirmed working end to end (`flutter build ios --debug --no-codesign` succeeds). Data is sample/static pending Supabase schema design and real camera/OCR pipeline wiring. **Open item**: `ManualEntryScreen` is built and tested in isolation but has no UI trigger wired yet (no button/gesture opens it from the main UI) — requires explicit design decision on where "add a cash transaction" lives in the navigation.
 
 ## Backend/database: Supabase
 
@@ -303,8 +307,10 @@ everywhere that pattern appears.**
 | Bottom nav tab | `.tab` (mockup) / `StubBottomNav` + `StubNavItem` (`lib/widgets/stub_bottom_nav.dart`) | `.tab.active`, `.tab.scan-btn` (round, icon-only) |
 | Icon | `.src` (mockup) / `StubIcon` + `StubIcons` (`lib/widgets/stub_icon.dart`) | general-purpose recolorable SVG icon — transaction-source icons (receipt/payment app/bank) per `DESIGN.md` §7, plus nav, close, lock, camera, pencil icons used throughout the app |
 | Transaction list tile | `StubTransactionTile` (`lib/widgets/stub_transaction_tile.dart`) | icon + description + amount + date |
-| Hero numeral (gradient) | `.mono` + gradient override (mockup) on `.hero-total .amount` / `.widget .wamount` / `.amount-display .big-amt` | the one "pop" number per screen |
+| Hero numeral (gradient) | `.mono` + gradient override (mockup) / `StubHeroAmount` (`lib/widgets/stub_hero_amount.dart`) | the one "pop" number per screen (Ledger, Budgets); Manual Entry's editable amount uses the same `ShaderMask`/`gradPop` technique directly around its `TextField` instead, since `StubHeroAmount` can't stay editable |
 | Logo mark | `StubLogo` (`lib/widgets/stub_logo.dart`) | torn stub + check, see DESIGN.md §7 — reuse this everywhere the mark appears (app icon, wordmark, splash), don't redraw the shape |
+| Tap feedback wrapper | `StubPressable` (`lib/widgets/stub_pressable.dart`) | scale+fade press state; `ensureMinTapSize: true` pads the hit area to 44x44 without changing the visible child — used on every tappable widget/screen instead of `InkWell` |
+| Currency formatting | `formatCurrency` (`lib/util/currency.dart`) | thousands separators, negative-safe; used everywhere a screen displays a dollar amount |
 
 Before adding a new row to this table, check the list above — the answer is
 often "reuse an existing one" rather than "add a new one."
