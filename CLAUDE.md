@@ -24,7 +24,7 @@ it.
 | `app/lib/models/budget_limit.dart` | `BudgetLimit` — budget cap and alert threshold per category |
 | `app/lib/widgets/stub_button.dart` | `StubButton` — Add/Save variant button, see Component inventory below |
 | `app/lib/widgets/stub_logo.dart` | `StubLogo` — the torn-stub-+-check mark, DESIGN.md §7 |
-| `app/lib/widgets/stub_icon.dart` | `StubIcon`, `StubIcons` — transaction source icons (receipt/payment/bank) with badges |
+| `app/lib/widgets/stub_icon.dart` | `StubIcon`, `StubIcons` — recolorable Tabler SVG icon widget; `StubIcons` holds 10 icons (home, camera, chartBar, userCircle, receipt, cashBanknote, buildingBank, lock, pencil, x) used across nav, close buttons, and screens — not limited to transaction-source badges |
 | `app/lib/widgets/stub_card.dart` | `StubCard` — reusable card surface for dashboard, category rows, transaction tiles |
 | `app/lib/widgets/stub_chip.dart` | `StubChip` — category filter chip with active/gradient state |
 | `app/lib/widgets/stub_field_row.dart` | `StubFieldRow` — label + value pair, used in Edit Entry and Manual Entry screens |
@@ -285,7 +285,7 @@ everywhere that pattern appears.**
 | Progress ring | `.ring` (mockup SVG, `.track` + `.fill`) / `StubProgressRing` (`lib/widgets/stub_progress_ring.dart`) | shared between dashboard hero and widget |
 | Card surface | `.surface`-based cards (mockup) / `StubCard` (`lib/widgets/stub_card.dart`) | `.hero-total`, `.categories`, list items |
 | Bottom nav tab | `.tab` (mockup) / `StubBottomNav` + `StubNavItem` (`lib/widgets/stub_bottom_nav.dart`) | `.tab.active`, `.tab.scan-btn` (round, icon-only) |
-| Transaction/source icon badge | `.src` (mockup) / `StubIcon` + `StubIcons` (`lib/widgets/stub_icon.dart`) | icon swapped per source (receipt / payment app / bank) — see `DESIGN.md` §7 |
+| Icon | `.src` (mockup) / `StubIcon` + `StubIcons` (`lib/widgets/stub_icon.dart`) | general-purpose recolorable SVG icon — transaction-source icons (receipt/payment app/bank) per `DESIGN.md` §7, plus nav, close, lock, camera, pencil icons used throughout the app |
 | Transaction list tile | `StubTransactionTile` (`lib/widgets/stub_transaction_tile.dart`) | icon + description + amount + date |
 | Hero numeral (gradient) | `.mono` + gradient override (mockup) on `.hero-total .amount` / `.widget .wamount` / `.amount-display .big-amt` | the one "pop" number per screen |
 | Logo mark | `StubLogo` (`lib/widgets/stub_logo.dart`) | torn stub + check, see DESIGN.md §7 — reuse this everywhere the mark appears (app icon, wordmark, splash), don't redraw the shape |
