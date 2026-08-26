@@ -31,11 +31,11 @@ it.
 | `app/lib/widgets/stub_progress_ring.dart` | `StubProgressRing` — circular progress ring, shared between dashboard hero and widget |
 | `app/lib/widgets/stub_progress_bar.dart` | `StubProgressBar` — linear progress bar with over-budget warning state |
 | `app/lib/widgets/stub_transaction_tile.dart` | `StubTransactionTile` — list row for a single transaction (icon, description, amount, date) |
-| `app/lib/widgets/stub_bottom_nav.dart` | `StubBottomNav`, `StubNavItem` — bottom navigation bar with 3 tabs (Ledger/Scan/Budgets) + round scan button |
-| `app/lib/screens/root_shell.dart` | `RootShell` — top-level navigation shell, wires LedgerScreen/ScanScreen/BudgetsScreen via StubBottomNav |
+| `app/lib/widgets/stub_bottom_nav.dart` | `StubBottomNav`, `StubNavItem` — bottom navigation bar with 3 tabs (Home/Budgets/Profile) + a separate fixed round scan button (not one of the 3 tabs) |
+| `app/lib/screens/root_shell.dart` | `RootShell` — top-level navigation shell; tab-switches LedgerScreen/BudgetsScreen via StubBottomNav, pushes ScanScreen/EditEntryScreen via Navigator.push from the scan button/transaction tap |
 | `app/lib/screens/ledger_screen.dart` | `LedgerScreen` — transaction list with category filtering and sample data |
-| `app/lib/screens/scan_screen.dart` | `ScanScreen` — camera placeholder for OCR pipeline (camera/parsing wired, edit entry flow wired) |
-| `app/lib/screens/edit_entry_screen.dart` | `EditEntryScreen` — correct/review transaction details with camera re-capture |
+| `app/lib/screens/scan_screen.dart` | `ScanScreen` — presentational confirm-card screen; no camera/OCR/parsing wired (deferred — see OCR/parsing spike section) |
+| `app/lib/screens/edit_entry_screen.dart` | `EditEntryScreen` — correct/review transaction details (merchant, amount, category); no camera/re-capture feature |
 | `app/lib/screens/manual_entry_screen.dart` | `ManualEntryScreen` — manual transaction entry form (built and tested, no UI trigger wired yet) |
 | `app/lib/screens/budgets_screen.dart` | `BudgetsScreen` — budget overview dashboard with categories and progress rings |
 | `app/lib/screens/lock_screen.dart` | `LockScreen` — app unlock flow, real entry point before RootShell |
