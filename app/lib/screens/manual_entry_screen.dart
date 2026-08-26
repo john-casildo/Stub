@@ -1,0 +1,146 @@
+import 'package:flutter/material.dart';
+import '../theme/colors.dart';
+import '../theme/text.dart';
+import '../widgets/stub_button.dart';
+import '../widgets/stub_chip.dart';
+import '../widgets/stub_field_row.dart';
+import '../widgets/stub_icon.dart';
+
+class ManualEntryScreen extends StatefulWidget {
+  const ManualEntryScreen({
+    super.key,
+    required this.categories,
+    required this.onClose,
+    required this.onSave,
+  });
+
+  final List<String> categories;
+  final VoidCallback onClose;
+  final void Function(double amount, String merchant, String category) onSave;
+
+  @override
+  State<ManualEntryScreen> createState() => _ManualEntryScreenState();
+}
+
+class _ManualEntryScreenState extends State<ManualEntryScreen> {
+  final _amountController = TextEditingController(text: '0.00');
+  final _merchantController = TextEditingController();
+  late String _selected = widget.categories.first;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _merchantController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
+    final ink30 = ink.withValues(alpha: 0.3);
+
+    return Scaffold(
+      backgroundColor: isDark ? StubColors.bgDark : StubColors.bgLight,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(icon: StubIcon(StubIcons.x, size: 18, color: ink), onPressed: widget.onClose),
+        title: Text('New entry', style: StubText.archivo(fontSize: 16, fontWeight: FontWeight.w700, color: ink)),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 12),
+              Center(
+                child: Column(
+                  children: [
+                    IntrinsicWidth(
+                      child: TextField(
+                        controller: _amountController,
+                        textAlign: TextAlign.center,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: StubText.unbounded(fontSize: 32, color: ink),
+                        decoration: const InputDecoration(border: InputBorder.none, prefixText: '\$'),
+                      ),
+                    ),
+                    Text('tap to type an amount', style: StubText.archivo(fontSize: 11, letterSpacing: 0.5, color: ink30)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              StubFieldRow(
+                label: 'Merchant',
+                value: _merchantController.text.isEmpty ? 'Add a name' : _merchantController.text,
+                valueColor: _merchantController.text.isEmpty ? ink30 : null,
+                onTap: () async {
+                  final name = await showDialog<String>(
+                    context: context,
+                    builder: (context) => _MerchantDialog(initial: _merchantController.text),
+                  );
+                  if (name != null) setState(() => _merchantController.text = name);
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('CATEGORY', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink30)),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final c in widget.categories)
+                          StubChip(label: c, selected: c == _selected, onTap: () => setState(() => _selected = c)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              StubFieldRow(label: 'Source', value: 'Manual · cash', valueColor: ink.withValues(alpha: 0.6)),
+              const SizedBox(height: 20),
+              StubButton(
+                label: 'Save entry',
+                variant: StubButtonVariant.save,
+                onPressed: () {
+                  final amount = double.tryParse(_amountController.text) ?? 0;
+                  widget.onSave(amount, _merchantController.text, _selected);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MerchantDialog extends StatefulWidget {
+  const _MerchantDialog({required this.initial});
+  final String initial;
+
+  @override
+  State<_MerchantDialog> createState() => _MerchantDialogState();
+}
+
+class _MerchantDialogState extends State<_MerchantDialog> {
+  late final _controller = TextEditingController(text: widget.initial);
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Merchant name'),
+      content: TextField(controller: _controller, autofocus: true),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.of(context).pop(_controller.text), child: const Text('Save')),
+      ],
+    );
+  }
+}
