@@ -53,9 +53,9 @@ class StubBottomNav extends StatelessWidget {
               active
                   ? ShaderMask(
                       shaderCallback: (rect) => StubColors.gradPop(brightness).createShader(rect),
-                      child: Text(item.label, style: StubText.archivo(fontSize: 11, color: Colors.white)),
+                      child: Text(item.label, style: StubText.archivo(fontSize: 11, color: Colors.white).copyWith(height: 1.0)),
                     )
-                  : Text(item.label, style: StubText.archivo(fontSize: 11, color: ink30)),
+                  : Text(item.label, style: StubText.archivo(fontSize: 11, color: ink30).copyWith(height: 1.0)),
             ],
           ),
         ),
