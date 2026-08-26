@@ -33,11 +33,11 @@ it.
 | `app/lib/widgets/stub_transaction_tile.dart` | `StubTransactionTile` — list row for a single transaction (icon, description, amount, date) |
 | `app/lib/widgets/stub_bottom_nav.dart` | `StubBottomNav`, `StubNavItem` — bottom navigation bar with 3 tabs (Home/Budgets/Profile) + a separate fixed round scan button (not one of the 3 tabs) |
 | `app/lib/screens/root_shell.dart` | `RootShell` — top-level navigation shell; tab-switches LedgerScreen/BudgetsScreen via StubBottomNav, pushes ScanScreen/EditEntryScreen via Navigator.push from the scan button/transaction tap |
-| `app/lib/screens/ledger_screen.dart` | `LedgerScreen` — transaction list with category filtering and sample data |
+| `app/lib/screens/ledger_screen.dart` | `LedgerScreen` — hero "left to spend" progress ring, per-category spend list, and recent transactions (sample data; no category filtering) |
 | `app/lib/screens/scan_screen.dart` | `ScanScreen` — presentational confirm-card screen; no camera/OCR/parsing wired (deferred — see OCR/parsing spike section) |
 | `app/lib/screens/edit_entry_screen.dart` | `EditEntryScreen` — correct/review transaction details (merchant, amount, category); no camera/re-capture feature |
 | `app/lib/screens/manual_entry_screen.dart` | `ManualEntryScreen` — manual transaction entry form (built and tested, no UI trigger wired yet) |
-| `app/lib/screens/budgets_screen.dart` | `BudgetsScreen` — budget overview dashboard with categories and progress rings |
+| `app/lib/screens/budgets_screen.dart` | `BudgetsScreen` — budget overview dashboard with an overall `StubProgressBar` and per-category `StubProgressBar` rows |
 | `app/lib/screens/lock_screen.dart` | `LockScreen` — app unlock flow, real entry point before RootShell |
 | `app/test/widget_test.dart` | App-level smoke test — boots locked, unlocks into the real ledger |
 | `app/test/models_test.dart` | Tests for `Transaction`/`CategorySpend`/`BudgetLimit` |
@@ -182,6 +182,19 @@ hot-reload/JIT machinery that never ships to real users. Always measure
   accuracy number. Worth revisiting with a larger, more varied sample
   (different banks/apps/receipt formats, more lighting conditions) before
   shipping.
+- **Pre-ship blocker: `LockScreen` is cosmetic only.** `main.dart`'s
+  `_unlocked` flag is set by either button — "Use passcode" unlocks with
+  no passcode entry, there's no `AppLifecycleState` observer so the app
+  never re-locks after backgrounding, and the `local_auth` dependency is
+  present but unused. The screen's copy ("Your ledger, kept private")
+  currently promises privacy the app doesn't provide. Must wire real
+  biometric/passcode auth (and re-lock on background) before shipping —
+  this is a real security gap, not a stylistic one.
+- **`ManualEntryScreen` has no UI trigger** — built and tested in
+  isolation but unreachable from the app's actual navigation (see
+  `root_shell.dart`'s `_openManualEntry`, kept alive only by
+  `// ignore: unused_element`). Needs a design decision on where "add a
+  cash transaction" lives before it can be wired in.
 
 ## OCR/parsing spike — result (resolved)
 
