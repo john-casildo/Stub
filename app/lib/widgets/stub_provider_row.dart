@@ -37,7 +37,13 @@ class StubProviderRow extends StatelessWidget {
       ),
     );
 
-    if (!enabled) return row;
+    if (!enabled) {
+      return Semantics(
+        enabled: false,
+        label: '$label, coming soon',
+        child: IgnorePointer(child: row),
+      );
+    }
     return StubPressable(onTap: onTap, child: row);
   }
 }

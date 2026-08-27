@@ -31,4 +31,24 @@ void main() {
     await tester.tap(find.text('Apple'));
     expect(tapped, isFalse);
   });
+
+  testWidgets('A disabled row absorbs taps instead of letting them reach a widget behind it', (tester) async {
+    var behindTapped = false;
+    await tester.pumpWidget(MaterialApp(home: Center(child: Stack(
+      children: [
+        GestureDetector(onTap: () => behindTapped = true, child: Container(width: 300, height: 60, color: Colors.red)),
+        StubProviderRow(
+          icon: StubIcons.brandApple,
+          label: 'Apple',
+          enabled: false,
+        ),
+      ],
+    ))));
+
+    // warnIfMissed: false — the tap intentionally can't hit "Apple" itself
+    // (IgnorePointer), which is exactly the behavior under test; what
+    // matters is that it doesn't fall through to the widget behind it.
+    await tester.tap(find.text('Apple'), warnIfMissed: false);
+    expect(behindTapped, isFalse);
+  });
 }
