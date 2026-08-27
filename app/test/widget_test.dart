@@ -1,9 +1,27 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 
 import 'package:stub/data/fakes.dart';
 import 'package:stub/data/local_prefs.dart';
 import 'package:stub/main.dart';
+
+/// A [SharedPreferencesStorePlatform] whose reads/writes always throw, used
+/// to force a real failure through [LocalPrefs] (which wraps the real
+/// `SharedPreferences` API) without needing to turn `LocalPrefs` into an
+/// interface with a fake just for this one test.
+class _ThrowingSharedPreferencesStore extends SharedPreferencesStorePlatform {
+  @override
+  Future<bool> clear() => throw Exception('local prefs unavailable');
+  @override
+  Future<Map<String, Object>> getAll() =>
+      throw Exception('local prefs unavailable');
+  @override
+  Future<bool> remove(String key) => throw Exception('local prefs unavailable');
+  @override
+  Future<bool> setValue(String valueType, String key, Object value) =>
+      throw Exception('local prefs unavailable');
+}
 
 void main() {
   setUp(() {
@@ -50,4 +68,31 @@ void main() {
 
     expect(find.text('LEFT TO SPEND'), findsOneWidget);
   });
+
+  testWidgets(
+    'A broken local-prefs read on unlock does not strand the app on a blank screen',
+    (tester) async {
+      // Force a real failure through LocalPrefs's underlying
+      // SharedPreferences calls (rather than stubbing LocalPrefs itself,
+      // which isn't an interface) to prove _LockGate's guard falls
+      // through to RootShell instead of hanging on SizedBox.shrink().
+      SharedPreferencesStorePlatform.instance = _ThrowingSharedPreferencesStore();
+
+      await tester.pumpWidget(StubApp(
+        categoryRepository: FakeCategoryRepository(),
+        transactionRepository: FakeTransactionRepository(),
+        budgetRepository: FakeBudgetRepository(),
+        accountLinkService: FakeAccountLinkService(),
+        localPrefs: LocalPrefs(),
+      ));
+
+      await tester.tap(find.text('Unlock with Face ID'));
+      await tester.pumpAndSettle();
+
+      // Falls straight through to RootShell — no blank screen, no
+      // backup-prompt (its "already seen" flag couldn't be read either).
+      expect(find.text('LEFT TO SPEND'), findsOneWidget);
+      expect(find.text('Back up your data'), findsNothing);
+    },
+  );
 }

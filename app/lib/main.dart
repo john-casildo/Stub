@@ -105,18 +105,22 @@ class _LockGateState extends State<_LockGate> {
 
   Future<void> _handleUnlock() async {
     setState(() => _unlocked = true);
-    final alreadySeen = await widget.localPrefs.hasSeenBackupPrompt();
-    if (!mounted) return;
-    if (alreadySeen) {
-      setState(() => _showBackupPrompt = false);
-      return;
+    bool showPrompt = false;
+    try {
+      final alreadySeen = await widget.localPrefs.hasSeenBackupPrompt();
+      if (!alreadySeen) {
+        // Set the flag as soon as the prompt is about to be shown, not
+        // only once it's dismissed, so a killed app mid-prompt doesn't
+        // re-show it forever.
+        await widget.localPrefs.setHasSeenBackupPrompt(true);
+        showPrompt = true;
+      }
+    } catch (_) {
+      // A broken local-prefs read/write must never strand the app on a
+      // blank screen — fall through to RootShell instead.
     }
-    // Set the flag as soon as the prompt is about to be shown, not only
-    // once it's dismissed, so a killed app mid-prompt doesn't re-show it
-    // forever.
-    await widget.localPrefs.setHasSeenBackupPrompt(true);
     if (!mounted) return;
-    setState(() => _showBackupPrompt = true);
+    setState(() => _showBackupPrompt = showPrompt);
   }
 
   @override
