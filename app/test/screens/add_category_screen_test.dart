@@ -31,4 +31,69 @@ void main() {
     expect(savedLimit, 300);
     expect(savedType, BudgetPeriodType.monthly); // default selection
   });
+
+  testWidgets('Custom period with no dates set blocks save and shows a message', (tester) async {
+    var saveCalled = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AddCategoryScreen(
+          onClose: () {},
+          onSave: (name, limit, type, start, end) => saveCalled = true,
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, 'Groceries');
+    await tester.tap(find.text('Custom'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Save category'));
+    await tester.tap(find.text('Save category'));
+    await tester.pump();
+
+    expect(find.text('Pick both a start and end date for a custom period.'), findsOneWidget);
+    expect(saveCalled, isFalse);
+  });
+
+  testWidgets('Custom period with end date before start date blocks save and shows a message', (tester) async {
+    var saveCalled = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AddCategoryScreen(
+          onClose: () {},
+          onSave: (name, limit, type, start, end) => saveCalled = true,
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, 'Groceries');
+    await tester.tap(find.text('Custom'));
+    await tester.pump();
+
+    // Pick the start date via the real Material date picker: switch to
+    // input mode and type a date later than the end date we'll pick next.
+    await tester.tap(find.text('START DATE'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.descendant(of: find.byType(Dialog), matching: find.byType(TextField)), '08/20/2026');
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('END DATE'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.descendant(of: find.byType(Dialog), matching: find.byType(TextField)), '08/10/2026');
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Save category'));
+    await tester.tap(find.text('Save category'));
+    await tester.pump();
+
+    expect(find.text('End date must be after the start date.'), findsOneWidget);
+    expect(saveCalled, isFalse);
+  });
 }

@@ -34,6 +34,20 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
     final name = _nameController.text.trim();
     final limit = double.tryParse(_limitController.text) ?? 0;
     if (name.isEmpty) return;
+    if (_periodType == BudgetPeriodType.custom) {
+      if (_customStart == null || _customEnd == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pick both a start and end date for a custom period.')),
+        );
+        return;
+      }
+      if (_customEnd!.isBefore(_customStart!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('End date must be after the start date.')),
+        );
+        return;
+      }
+    }
     widget.onSave(name, limit, _periodType, _customStart ?? DateTime.now(), _customEnd);
   }
 
