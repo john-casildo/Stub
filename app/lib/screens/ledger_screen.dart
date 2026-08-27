@@ -22,6 +22,7 @@ class LedgerScreen extends StatelessWidget {
     required this.navItems,
     required this.onNavTap,
     required this.onScanTap,
+    required this.onAddManualEntry,
     this.onTransactionTap,
   });
 
@@ -34,6 +35,7 @@ class LedgerScreen extends StatelessWidget {
   final List<StubNavItem> navItems;
   final ValueChanged<int> onNavTap;
   final VoidCallback onScanTap;
+  final VoidCallback onAddManualEntry;
   final ValueChanged<Transaction>? onTransactionTap;
 
   @override
@@ -45,6 +47,17 @@ class LedgerScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: bg,
+      floatingActionButton: FloatingActionButton(
+        key: const Key('ledger-add-manual-entry'),
+        onPressed: onAddManualEntry,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          decoration: BoxDecoration(shape: BoxShape.circle, gradient: StubColors.gradPop(Theme.of(context).brightness)),
+          child: const Icon(Icons.add, color: Colors.white),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: SafeArea(
         child: Column(
           children: [

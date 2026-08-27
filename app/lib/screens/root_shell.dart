@@ -88,10 +88,6 @@ class _RootShellState extends State<RootShell> {
     ));
   }
 
-  // Not wired to a UI trigger yet — none of the composed screens (ledger,
-  // budgets) expose a manual-entry entry point in the current mockup set.
-  // Kept so the modal is ready to hook up once one does.
-  // ignore: unused_element
   void _openManualEntry() {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ManualEntryScreen(
@@ -132,6 +128,7 @@ class _RootShellState extends State<RootShell> {
         navItems: _navItems,
         onNavTap: (i) => setState(() => _tabIndex = i),
         onScanTap: _openScan,
+        onAddManualEntry: _openManualEntry,
         onTransactionTap: _openEditEntry,
       );
     }
