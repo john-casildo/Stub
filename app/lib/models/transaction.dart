@@ -64,4 +64,14 @@ class Transaction {
         'source': _wireSource(source),
         'occurred_at': occurredAt.toIso8601String(),
       };
+
+  Transaction copyWith({String? merchant, double? amount, String? categoryId, String? category}) => Transaction(
+        id: id,
+        categoryId: categoryId ?? this.categoryId,
+        merchant: merchant ?? this.merchant,
+        amount: amount ?? this.amount,
+        category: category ?? this.category,
+        source: source,
+        occurredAt: occurredAt,
+      );
 }
