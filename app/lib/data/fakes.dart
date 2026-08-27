@@ -109,6 +109,11 @@ class FakeBudgetRepository implements BudgetRepository {
 }
 
 class FakeAccountLinkService implements AccountLinkService {
+  // Can't use `this._isAnonymous` here — the public constructor param must
+  // stay named `isAnonymous` (matching the interface's public getter of the
+  // same name), and Dart would force the param's external name to match the
+  // private field name instead.
+  // ignore: prefer_initializing_formals
   FakeAccountLinkService({bool isAnonymous = true, this.linkedEmail}) : _isAnonymous = isAnonymous;
   bool _isAnonymous;
   @override
