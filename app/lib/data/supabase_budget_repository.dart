@@ -10,7 +10,7 @@ class SupabaseBudgetRepository implements BudgetRepository {
 
   @override
   Future<List<BudgetLimit>> list() async {
-    final rows = await _client.from('budget_progress').select();
+    final rows = await _client.from('budget_progress').select().order('category_name');
     return rows.map((row) => BudgetLimit.fromRow(row)).toList();
   }
 
