@@ -2,36 +2,13 @@ import 'package:flutter/material.dart';
 import '../data/account_link_service.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
-import '../widgets/stub_button.dart';
-import '../widgets/stub_icon.dart';
-import '../widgets/stub_provider_row.dart';
+import '../widgets/stub_account_link_panel.dart';
 
-class BackupPromptScreen extends StatefulWidget {
+class BackupPromptScreen extends StatelessWidget {
   const BackupPromptScreen({super.key, required this.accountLinkService, required this.onDone});
 
   final AccountLinkService accountLinkService;
   final VoidCallback onDone;
-
-  @override
-  State<BackupPromptScreen> createState() => _BackupPromptScreenState();
-}
-
-class _BackupPromptScreenState extends State<BackupPromptScreen> {
-  bool _showEmailField = false;
-  final _emailController = TextEditingController();
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submitEmail() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) return;
-    await widget.accountLinkService.linkEmail(email);
-    widget.onDone();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,24 +30,11 @@ class _BackupPromptScreenState extends State<BackupPromptScreen> {
                 style: StubText.archivo(fontSize: 14, color: ink.withValues(alpha: 0.6)),
               ),
               const SizedBox(height: 24),
-              StubProviderRow(icon: StubIcons.mail, label: 'Email', enabled: true, onTap: () => setState(() => _showEmailField = true)),
-              StubProviderRow(icon: StubIcons.brandApple, label: 'Apple', enabled: false),
-              StubProviderRow(icon: StubIcons.brandGoogle, label: 'Google', enabled: false),
-              StubProviderRow(icon: StubIcons.phone, label: 'Phone', enabled: false),
-              if (_showEmailField) ...[
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Email address'),
-                ),
-                const SizedBox(height: 12),
-                StubButton(label: 'Send link', onPressed: _submitEmail),
-              ],
+              StubAccountLinkPanel(accountLinkService: accountLinkService, onLinked: onDone),
               const Spacer(),
               Center(
                 child: TextButton(
-                  onPressed: widget.onDone,
+                  onPressed: onDone,
                   child: Text('Skip', style: StubText.archivo(fontSize: 14, color: ink.withValues(alpha: 0.5))),
                 ),
               ),
