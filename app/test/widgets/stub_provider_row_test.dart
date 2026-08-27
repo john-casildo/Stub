@@ -28,7 +28,9 @@ void main() {
     ))));
 
     expect(find.text('Coming soon'), findsOneWidget);
-    await tester.tap(find.text('Apple'));
+    // warnIfMissed: false — IgnorePointer means this tap genuinely can't
+    // hit "Apple" itself; that's the behavior under test.
+    await tester.tap(find.text('Apple'), warnIfMissed: false);
     expect(tapped, isFalse);
   });
 

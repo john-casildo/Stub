@@ -46,7 +46,9 @@ void main() {
       onDone: () {},
     )));
 
-    await tester.tap(find.text('Apple'));
+    // warnIfMissed: false — IgnorePointer means this tap genuinely can't
+    // hit "Apple" itself; that's the behavior under test.
+    await tester.tap(find.text('Apple'), warnIfMissed: false);
     await tester.pump();
     expect(service.linkedEmail, isNull);
     expect(find.text('Send link'), findsNothing); // no email sub-flow opened
