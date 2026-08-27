@@ -11,7 +11,15 @@ Future<void> main() async {
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.publishableKey,
   );
+  await _ensureSession();
   runApp(const StubApp());
+}
+
+Future<void> _ensureSession() async {
+  final client = Supabase.instance.client;
+  if (client.auth.currentSession == null) {
+    await client.auth.signInAnonymously();
+  }
 }
 
 class StubApp extends StatelessWidget {
