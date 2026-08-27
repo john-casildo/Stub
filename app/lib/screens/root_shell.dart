@@ -4,6 +4,7 @@ import '../models/category_spend.dart';
 import '../models/transaction.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_icon.dart';
+import 'add_category_screen.dart';
 import 'budgets_screen.dart';
 import 'edit_entry_screen.dart';
 import 'ledger_screen.dart';
@@ -78,6 +79,15 @@ class _RootShellState extends State<RootShell> {
     ));
   }
 
+  void _openAddCategory() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => AddCategoryScreen(
+        onClose: () => Navigator.of(context).pop(),
+        onSave: (name, limit, type, start, end) => Navigator.of(context).pop(),
+      ),
+    ));
+  }
+
   // Not wired to a UI trigger yet — none of the composed screens (ledger,
   // budgets) expose a manual-entry entry point in the current mockup set.
   // Kept so the modal is ready to hook up once one does.
@@ -105,7 +115,7 @@ class _RootShellState extends State<RootShell> {
         navItems: _navItems,
         onNavTap: (i) => setState(() => _tabIndex = i),
         onScanTap: _openScan,
-        onAddCategory: () {},
+        onAddCategory: _openAddCategory,
       );
     } else {
       // Tab 2 (Profile) has no screen in the original mockup set — falls
