@@ -93,6 +93,23 @@ dark-mode toggle. Double check all three whenever a color changes.
 | `--grad-pop` | `linear-gradient(135deg, var(--accent) 0%, #34F5D0 100%)` |
 | `--grad-b-color` | `#34F5D0` |
 
+### Category swatch palette (new, user-created categories only)
+
+Not semantically reserved like `--accent`/`--good`/`--warn`/`--danger` above —
+these exist only to visually distinguish one user-created category from
+another (the dot next to "Groceries", "Dining out", etc.). Assigned by
+cycling through this list in category-creation order; never chosen by hand
+per category.
+
+| # | Light | Dark |
+|---|---|---|
+| 1 | `#5B6B8C` | `#8CA0C7` |
+| 2 | `#7A5B7A` | `#B08CB0` |
+| 3 | `#A68A3E` | `#D4B75E` |
+| 4 | `#4F7A78` | `#7CBAB7` |
+| 5 | `#A15C43` | `#D08A6E` |
+| 6 | `#6B5B95` | `#A395C9` |
+
 **`--ink` and `--bg` double as the "black in light mode / white in dark mode"
 pair** — used directly (not just for text) on the one secondary button that
 needs to invert with theme (see §4).
