@@ -12,4 +12,11 @@ void main() {
     );
     expect(find.byType(SvgPicture), findsOneWidget);
   });
+
+  testWidgets('StubIcons has mail, brandApple, brandGoogle, and phone', (tester) async {
+    for (final icon in [StubIcons.mail, StubIcons.brandApple, StubIcons.brandGoogle, StubIcons.phone]) {
+      await tester.pumpWidget(MaterialApp(home: Center(child: StubIcon(icon, color: Colors.black))));
+      expect(find.byType(SvgPicture), findsOneWidget);
+    }
+  });
 }
