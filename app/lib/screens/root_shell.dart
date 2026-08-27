@@ -92,19 +92,16 @@ class _RootShellState extends State<RootShell> {
         selectedCategory: transaction.category,
         sourceLabel: transaction.dateLabel,
         onClose: () => Navigator.of(context).pop(),
-        onSave: (selectedCategory) async {
+        onSave: (selectedCategory) => _guardedWrite(() async {
           final category = categories.firstWhere((c) => c.name == selectedCategory);
           await widget.transactionRepository.update(
             transaction.copyWith(category: selectedCategory, categoryId: category.id),
           );
-          if (mounted) Navigator.of(context).pop();
-          _reload();
-        },
-        onDelete: () async {
-          await widget.transactionRepository.delete(transaction.id);
-          if (mounted) Navigator.of(context).pop();
-          _reload();
-        },
+        }, onSuccess: () => Navigator.of(context).pop()),
+        onDelete: () => _guardedWrite(
+          () => widget.transactionRepository.delete(transaction.id),
+          onSuccess: () => Navigator.of(context).pop(),
+        ),
       ),
     ));
   }
@@ -113,28 +110,62 @@ class _RootShellState extends State<RootShell> {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => AddCategoryScreen(
         onClose: () => Navigator.of(context).pop(),
-        onSave: (name, limitAmount, periodType, periodStart, periodEnd) async {
+        onSave: (name, limitAmount, periodType, periodStart, periodEnd) => _guardedWrite(() async {
           final category = await widget.categoryRepository.create(name);
-          await widget.budgetRepository.create(
-            categoryId: category.id,
-            limitAmount: limitAmount,
-            periodType: periodType,
-            periodStart: periodStart,
-            periodEnd: periodEnd,
-          );
-          if (mounted) Navigator.of(context).pop();
-          _reload();
-        },
+          try {
+            await widget.budgetRepository.create(
+              categoryId: category.id,
+              limitAmount: limitAmount,
+              periodType: periodType,
+              periodStart: periodStart,
+              periodEnd: periodEnd,
+            );
+          } catch (e) {
+            await widget.categoryRepository.delete(category.id);
+            rethrow;
+          }
+        }, onSuccess: () => Navigator.of(context).pop()),
       ),
     ));
   }
 
+  Future<void> _guardedWrite(Future<void> Function() write, {VoidCallback? onSuccess}) async {
+    try {
+      await write();
+      if (mounted) onSuccess?.call();
+      if (mounted) _reload();
+    } on PostgrestException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyMessage(e))));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Something went wrong. Please try again.')),
+        );
+      }
+    }
+  }
+
+  String _friendlyMessage(PostgrestException e) => switch (e.code) {
+        '23503' => "Can't delete a category with existing transactions.",
+        '23505' => 'A category with that name already exists.',
+        '23514' => 'Please check the values you entered.',
+        _ => 'Something went wrong. Please try again.',
+      };
+
   void _openManualEntry(List<Category> categories) {
+    if (categories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add a category first, then log an expense.')),
+      );
+      return;
+    }
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ManualEntryScreen(
         categories: [for (final c in categories) c.name],
         onClose: () => Navigator.of(context).pop(),
-        onSave: (amount, merchant, categoryName) async {
+        onSave: (amount, merchant, categoryName) => _guardedWrite(() async {
           final category = categories.firstWhere((c) => c.name == categoryName);
           await widget.transactionRepository.create(Transaction(
             id: '',
@@ -145,9 +176,7 @@ class _RootShellState extends State<RootShell> {
             source: TransactionSource.manual,
             occurredAt: DateTime.now(),
           ));
-          if (mounted) Navigator.of(context).pop();
-          _reload();
-        },
+        }, onSuccess: () => Navigator.of(context).pop()),
       ),
     ));
   }
@@ -155,18 +184,10 @@ class _RootShellState extends State<RootShell> {
   Future<void> _deleteCategory(String categoryId) async {
     try {
       await widget.categoryRepository.delete(categoryId);
-      _reload();
+      if (mounted) _reload();
     } on PostgrestException catch (e) {
-      if (e.code == '23503') {
-        // The ON DELETE RESTRICT rule firing — the category still has
-        // transactions pointing at it.
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Can't delete a category with existing transactions.")),
-          );
-        }
-      } else {
-        rethrow;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyMessage(e))));
       }
     }
   }

@@ -3,8 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:stub/data/category_repository.dart';
 import 'package:stub/data/fakes.dart';
+import 'package:stub/data/transaction_repository.dart';
 import 'package:stub/models/budget_limit.dart';
 import 'package:stub/models/category.dart';
+import 'package:stub/models/transaction.dart';
 import 'package:stub/screens/root_shell.dart';
 import 'package:stub/widgets/stub_bottom_nav.dart';
 
@@ -121,6 +123,46 @@ void main() {
     expect(find.text('Groceries'), findsNothing);
   });
 
+  testWidgets('Tapping Manual Entry FAB with zero categories shows a snackbar and does not push ManualEntryScreen', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: FakeCategoryRepository(),
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ledger-add-manual-entry')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add a category first, then log an expense.'), findsOneWidget);
+    expect(find.text('tap to type an amount'), findsNothing);
+  });
+
+  testWidgets('A failed write shows a friendly message and leaves the modal open', (tester) async {
+    final categories = FakeCategoryRepository();
+    await categories.create('Groceries');
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: _FailingCreateTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('ledger-add-manual-entry')));
+    await tester.pumpAndSettle();
+
+    // Manual entry pushed successfully — zero-category guard didn't fire.
+    expect(find.text('tap to type an amount'), findsOneWidget);
+
+    await tester.tap(find.text('Save entry'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('A category with that name already exists.'), findsOneWidget);
+    // The modal stayed open — the write failed, so onSuccess (which pops) never ran.
+    expect(find.text('tap to type an amount'), findsOneWidget);
+  });
+
   testWidgets('Deleting a category with existing transactions shows a blocked-delete message', (tester) async {
     final categories = FakeCategoryRepository();
     final groceries = await categories.create('Groceries');
@@ -185,4 +227,22 @@ class _RestrictingCategoryRepository implements CategoryRepository {
     }
     await _categories.delete(id);
   }
+}
+
+/// Always fails `create()` with a `23505` (unique-violation) `PostgrestException`
+/// — exercises `RootShell._guardedWrite`'s failure path (friendly message shown,
+/// modal stays open) without needing a real failing backend.
+class _FailingCreateTransactionRepository implements TransactionRepository {
+  @override
+  Future<List<Transaction>> list() async => const [];
+
+  @override
+  Future<Transaction> create(Transaction transaction) async =>
+      throw PostgrestException(code: '23505', message: 'duplicate key value violates unique constraint');
+
+  @override
+  Future<void> update(Transaction transaction) async => throw UnimplementedError();
+
+  @override
+  Future<void> delete(String id) async => throw UnimplementedError();
 }
