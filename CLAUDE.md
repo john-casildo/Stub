@@ -19,9 +19,18 @@ it.
 | `app/lib/theme/text.dart` | The 3-font system (Archivo/Domine/Unbounded) from DESIGN.md §1 |
 | `app/lib/theme/app_theme.dart` | Wires colors.dart + text.dart into Flutter's light/dark ThemeData |
 | `app/lib/config/supabase_config.dart` | Supabase URL + publishable key (client-safe; never put a secret key here) |
-| `app/lib/models/transaction.dart` | `Transaction`, `TransactionSource` — transaction models with category and amount |
+| `app/lib/models/transaction.dart` | `Transaction`, `TransactionSource` — transaction model; now also carries `categoryId`, `fromRow`/`toInsertRow` (Postgres row mapping), and `copyWith` |
 | `app/lib/models/category_spend.dart` | `CategorySpend` — aggregated spend by category for dashboard |
-| `app/lib/models/budget_limit.dart` | `BudgetLimit` — budget cap and alert threshold per category |
+| `app/lib/models/budget_limit.dart` | `BudgetLimit`, `BudgetPeriodType` (weekly/monthly/yearly/custom) — budget cap per category, `fromRow` maps a `budget_progress` view row |
+| `app/lib/models/category.dart` | `Category` — id/name, `fromRow`/`toInsertRow` |
+| `app/lib/theme/category_colors.dart` | `categoryColor(index, brightness)` — deterministic 6-color swatch cycle for category rows, light/dark palettes |
+| `app/lib/data/category_repository.dart` | `CategoryRepository` — abstract interface (`list`/`create`/`delete`) |
+| `app/lib/data/transaction_repository.dart` | `TransactionRepository` — abstract interface (`list`/`create`/`update`/`delete`) |
+| `app/lib/data/budget_repository.dart` | `BudgetRepository` — abstract interface (`list`/`create`) |
+| `app/lib/data/fakes.dart` | `FakeCategoryRepository`, `FakeTransactionRepository`, `FakeBudgetRepository` — in-memory test doubles. `FakeBudgetRepository` takes an *optional* `FakeCategoryRepository` link: when given, it resolves real category names on `create()` and drops budgets from `list()` once their category is gone (mirroring the schema's `ON DELETE CASCADE`); without it, falls back to a placeholder name and no cascade — a deliberate, non-naive design, not a plain in-memory store |
+| `app/lib/data/supabase_category_repository.dart` | `SupabaseCategoryRepository` — real Postgres-backed `CategoryRepository` via `supabase_flutter` |
+| `app/lib/data/supabase_transaction_repository.dart` | `SupabaseTransactionRepository` — real Postgres-backed `TransactionRepository`; joins `categories(name)` on read |
+| `app/lib/data/supabase_budget_repository.dart` | `SupabaseBudgetRepository` — real Postgres-backed `BudgetRepository`; reads from the `budget_progress` view |
 | `app/lib/widgets/stub_button.dart` | `StubButton` — Add/Save variant button, see Component inventory below |
 | `app/lib/widgets/stub_logo.dart` | `StubLogo` — the torn-stub-+-check mark, DESIGN.md §7 |
 | `app/lib/widgets/stub_icon.dart` | `StubIcon`, `StubIcons` — recolorable Tabler SVG icon widget; `StubIcons` holds 10 icons (home, camera, chartBar, userCircle, receipt, cashBanknote, buildingBank, lock, pencil, x) used across nav, close buttons, and screens — not limited to transaction-source badges |
@@ -34,21 +43,26 @@ it.
 | `app/lib/widgets/stub_bottom_nav.dart` | `StubBottomNav`, `StubNavItem` — bottom navigation bar with 3 tabs (Home/Budgets/Profile) + a separate fixed round scan button (not one of the 3 tabs) |
 | `app/lib/widgets/stub_hero_amount.dart` | `StubHeroAmount` — big gradient-text currency number (`ShaderMask` + `StubColors.gradPop`), used for every hero amount so blue never renders flat there |
 | `app/lib/widgets/stub_pressable.dart` | `StubPressable` — press feedback (scale+fade) wrapper for tappable widgets, with an optional 44x44 minimum tap-target guarantee; used instead of `InkWell` since most tappable surfaces here have an opaque gradient/solid fill that would hide a Material ripple |
+| `app/lib/widgets/stub_period_picker.dart` | `StubPeriodPicker` — weekly/monthly/yearly/custom period selector (built from `StubChip` + `StubFieldRow`); shows start/end date fields (via `showDatePicker`) only when Custom is selected |
 | `app/lib/util/currency.dart` | `formatCurrency` — shared thousands-separator currency formatter (negative-safe), used by every screen/widget that displays money |
-| `app/lib/screens/root_shell.dart` | `RootShell` — top-level navigation shell; tab-switches LedgerScreen/BudgetsScreen via StubBottomNav (cross-fades between them via `AnimatedSwitcher`), pushes ScanScreen/EditEntryScreen via Navigator.push from the scan button/transaction tap |
-| `app/lib/screens/ledger_screen.dart` | `LedgerScreen` — hero "left to spend" progress ring, per-category spend list, and recent transactions (sample data; no category filtering) |
+| `app/lib/screens/root_shell.dart` | `RootShell` — top-level navigation shell; loads real data from its three injected repositories (`categoryRepository`/`transactionRepository`/`budgetRepository`) via a `FutureBuilder` (`_load`/`_reload`, with loading and error+retry states), tab-switches LedgerScreen/BudgetsScreen via StubBottomNav (cross-fades between them via `AnimatedSwitcher`), and pushes ScanScreen/EditEntryScreen/ManualEntryScreen/AddCategoryScreen via Navigator.push, each wired to a real repository write followed by `_reload()`; category deletion surfaces the Postgres `ON DELETE RESTRICT` error (code `23503`) as a snackbar instead of crashing |
+| `app/lib/screens/ledger_screen.dart` | `LedgerScreen` — hero "left to spend" progress ring, per-category spend list (colored via `categoryColor`), and recent transactions, now fed real data by `RootShell`; has a `FloatingActionButton` (`onAddManualEntry`) that opens `ManualEntryScreen`; still no category filtering |
 | `app/lib/screens/scan_screen.dart` | `ScanScreen` — presentational confirm-card screen; no camera/OCR/parsing wired (deferred — see OCR/parsing spike section) |
-| `app/lib/screens/edit_entry_screen.dart` | `EditEntryScreen` — correct/review transaction details (merchant, amount, category); no camera/re-capture feature |
-| `app/lib/screens/manual_entry_screen.dart` | `ManualEntryScreen` — manual transaction entry form (built and tested, no UI trigger wired yet) |
-| `app/lib/screens/budgets_screen.dart` | `BudgetsScreen` — budget overview dashboard with an overall `StubProgressBar` and per-category `StubProgressBar` rows |
+| `app/lib/screens/edit_entry_screen.dart` | `EditEntryScreen` — correct/review transaction details (merchant, amount, category); saves/deletes via `TransactionRepository` through `RootShell`; no camera/re-capture feature |
+| `app/lib/screens/manual_entry_screen.dart` | `ManualEntryScreen` — manual transaction entry form; now reachable from `LedgerScreen`'s FAB (see Open items — the "no UI trigger" gap is resolved) and writes via `TransactionRepository` |
+| `app/lib/screens/add_category_screen.dart` | `AddCategoryScreen` — new-category form (name, limit amount, `StubPeriodPicker` for the budget period); `onSave` creates the category then the budget via `CategoryRepository`/`BudgetRepository`, opened from `BudgetsScreen`'s add-category tap |
+| `app/lib/screens/budgets_screen.dart` | `BudgetsScreen` — budget overview dashboard with an overall `StubProgressBar` and per-category `StubProgressBar` rows; each row has a delete `IconButton` (`onDeleteCategory`) and there's an add-category tap (`onAddCategory`) that opens `AddCategoryScreen` |
 | `app/lib/screens/lock_screen.dart` | `LockScreen` — app unlock flow, real entry point before RootShell |
-| `app/test/widget_test.dart` | App-level smoke test — boots locked, unlocks into the real ledger |
+| `app/test/widget_test.dart` | App-level smoke test — boots locked, unlocks into the real ledger, `pumpAndSettle`s past the post-unlock async data load |
 | `app/test/models_test.dart` | Tests for `Transaction`/`CategorySpend`/`BudgetLimit` |
-| `app/test/widgets/*_test.dart` | One test file per reusable widget (`stub_bottom_nav`, `stub_card`, `stub_chip`, `stub_field_row`, `stub_hero_amount`, `stub_icon`, `stub_pressable`, `stub_progress_bar`, `stub_progress_ring`, `stub_transaction_tile`) — same basename as the widget under `lib/widgets/` |
-| `app/test/screens/*_test.dart` | One test file per screen (`budgets_screen`, `edit_entry_screen`, `ledger_screen`, `lock_screen`, `manual_entry_screen`, `root_shell`, `scan_screen`) — same basename as the screen under `lib/screens/` |
+| `app/test/data/fakes_test.dart` | Tests for `FakeCategoryRepository`/`FakeTransactionRepository`/`FakeBudgetRepository` create/list/update/delete in-memory behavior |
+| `app/test/theme/category_colors_test.dart` | Tests for `categoryColor`'s deterministic cycling and light/dark divergence |
+| `app/test/widgets/*_test.dart` | One test file per reusable widget (`stub_bottom_nav`, `stub_card`, `stub_chip`, `stub_field_row`, `stub_hero_amount`, `stub_icon`, `stub_period_picker`, `stub_pressable`, `stub_progress_bar`, `stub_progress_ring`, `stub_transaction_tile`) — same basename as the widget under `lib/widgets/` |
+| `app/test/screens/*_test.dart` | One test file per screen (`add_category_screen`, `budgets_screen`, `edit_entry_screen`, `ledger_screen`, `lock_screen`, `manual_entry_screen`, `root_shell`, `scan_screen`) — same basename as the screen under `lib/screens/` |
 | `app/test/util/currency_test.dart` | Tests for `formatCurrency`, including the negative-amount case |
 | `app/tool/generate_icon_test.dart` | Renders `StubLogo` to `assets/icon/icon.png` for `flutter_launcher_icons`; re-run if the mark changes |
-| `app/supabase/config.toml` | Supabase CLI project config (linked to `jlygdlftvvgmekjcawgr`) |
+| `app/supabase/config.toml` | Supabase CLI project config (linked to `jlygdlftvvgmekjcawgr`); `[auth]` has `enable_anonymous_sign_ins = true`, pushed to and confirmed working against the real remote project |
+| `app/supabase/migrations/20260826222620_real_data_foundation.sql` | The real schema: `categories`/`budgets`/`transactions` tables (all with RLS, `select`/`insert`/`update`/`delete` "own rows only" policies keyed on `auth.uid()`), plus the `budget_progress` view (`security_invoker`) that joins each budget to its category name and sums transactions within the current period (weekly/monthly/yearly computed from `now()`, custom uses `period_start`/`period_end`) |
 | `ocr-spike/` (repo root) | The OCR accuracy spike — Swift scripts, sample images, raw results. Findings are already summarized in this file's "OCR/parsing spike" section below; only open the raw folder if you need something beyond that summary. |
 
 ---
@@ -104,7 +118,13 @@ Flutter SDK installed at `~/development/flutter`, on PATH via `~/.zshrc`.
 - `lib/screens/` — one file per screen, ported from `mockups.html` one at a
   time
 
-**Status**: theme + all reusable components (`StubButton`, `StubLogo`, `StubIcon`, `StubCard`, `StubChip`, `StubFieldRow`, `StubProgressRing`, `StubProgressBar`, `StubTransactionTile`, `StubBottomNav`/`StubNavItem`, `StubHeroAmount`, `StubPressable`) wired and verified (`flutter analyze` clean, 31 tests passing). All 6 real screens (Ledger, Scan, Edit Entry, Manual Entry, Budgets, Lock) ported from mockups and wired via `RootShell` navigation shell. `main.dart` now gates on `LockScreen` before showing the real app. Real app icon generated and installed for both iOS and Android via `tool/generate_icon_test.dart` (renders `StubLogo`'s exact geometry to `assets/icon/icon.png`) + `flutter_launcher_icons`. iOS build confirmed working end to end (`flutter build ios --debug --no-codesign` succeeds). Data is sample/static pending Supabase schema design and real camera/OCR pipeline wiring. **Open item**: `ManualEntryScreen` is built and tested in isolation but has no UI trigger wired yet (no button/gesture opens it from the main UI) — requires explicit design decision on where "add a cash transaction" lives in the navigation.
+**Status**: theme + all reusable components (`StubButton`, `StubLogo`, `StubIcon`, `StubCard`, `StubChip`, `StubFieldRow`, `StubProgressRing`, `StubProgressBar`, `StubTransactionTile`, `StubBottomNav`/`StubNavItem`, `StubHeroAmount`, `StubPressable`, `StubPeriodPicker`) wired and verified (`flutter analyze` clean, 50 tests passing). All 7 real screens (Ledger, Scan, Edit Entry, Manual Entry, Budgets, Lock, Add Category) ported/added and wired via `RootShell` navigation shell. `main.dart` now gates on `LockScreen` before showing the real app.
+
+The app now reads and writes **real data** through Supabase, not sample data: `main.dart` calls `Supabase.initialize()` then `_ensureSession()` (silently `signInAnonymously()`s if there's no existing session — anonymous auth is enabled and verified working against the real remote project, see the Supabase section below), then constructs the three real `Supabase*Repository` implementations and threads them down through `StubApp` → `_LockGate` → `RootShell`. `RootShell` loads categories/transactions/budgets on init, reloads after every write, and wires Ledger's manual-entry FAB, Edit Entry's save/delete, and a new Add Category screen (name + limit + period, via `StubPeriodPicker`) all the way through to Postgres. There is no user-facing profile/account screen yet and no Apple/Google/Email/Phone sign-in — anonymous auth is the whole identity story today; linking a persistent identity (Phase 2) is the next real step, not yet started. Camera/OCR capture is still not wired (see `ScanScreen`'s entry above) — `ScanScreen` still uses a hardcoded sample merchant/amount/category rather than a real scan result.
+
+Real app icon generated and installed for both iOS and Android via `tool/generate_icon_test.dart` (renders `StubLogo`'s exact geometry to `assets/icon/icon.png`) + `flutter_launcher_icons`. iOS build confirmed working end to end (`flutter build ios --debug --no-codesign` succeeds).
+
+**Testing approach**: all 50 tests are pure-Dart widget/unit tests run via `flutter test` against the in-memory fakes in `lib/data/fakes.dart` (or, for models/utils, no backend at all) — there is no integration test suite that hits the real Supabase project. The `Supabase*Repository` implementations (`lib/data/supabase_*_repository.dart`) are exercised only by manual/CLI verification during implementation (recorded in the task reports under `.superpowers/sdd/2026-08-26-real-data-foundation/`), not by an automated test run against the live database.
 
 ## Backend/database: Supabase
 
@@ -127,11 +147,40 @@ CLI authenticated (personal access token, correct account) and linked —
 commands from `app/` (where `supabase init` created the `supabase/`
 folder).
 
-Schema not designed yet — next step: transactions, categories, budgets,
-user profile tables + RLS policies (see the `supabase` skill's security
-checklist before writing any policy — enable RLS on every table, use
-`raw_app_meta_data` not `user_metadata` for authorization, remember UPDATE
-policies need both USING and WITH CHECK).
+**Schema** (migration: `app/supabase/migrations/20260826222620_real_data_foundation.sql`,
+pushed to and live on the linked remote project):
+- `categories` — `id`, `user_id` (FK `auth.users`, `on delete cascade`), `name`,
+  `created_at`; unique `(user_id, name)`.
+- `budgets` — `id`, `user_id`, `category_id` (FK `categories`, `on delete cascade`,
+  unique — one budget per category), `limit_amount`, `period_type`
+  (`weekly`/`monthly`/`yearly`/`custom`), `period_start`, `period_end`
+  (required when `period_type = 'custom'`), `created_at`.
+- `transactions` — `id`, `user_id`, `category_id` (FK `categories`, **`on delete
+  restrict`** — a category with transactions can't be deleted; `RootShell`
+  catches this as Postgres error code `23503` and shows a snackbar instead of
+  silently failing), `merchant`, `amount` (`> 0` only), `source`
+  (`receipt`/`payment_app`/`bank_screenshot`/`manual`), `image_path` (nullable,
+  unused so far — no upload path wired to it yet), `occurred_at`, `created_at`.
+- `budget_progress` — a `security_invoker` view joining each budget to its
+  category name and summing same-period transactions (period boundaries
+  computed from `now()` for weekly/monthly/yearly, from `period_start`/
+  `period_end` for custom); this is what `SupabaseBudgetRepository.list()`
+  actually reads from, not the `budgets` table directly.
+- RLS is enabled on all three tables with `select`/`insert`/`update`/`delete`
+  policies scoped to `user_id = (select auth.uid())` — every row is
+  own-rows-only, verified against the real (not just local) project.
+- No user-profile table yet — nothing beyond the anonymous `auth.users` row
+  itself.
+
+**Auth**: anonymous sign-in (`enable_anonymous_sign_ins`) is enabled on the
+**remote** project (this was initially `false` there and had to be flipped
+and pushed — see Task 5 in this plan's ledger) and confirmed working via a
+direct REST call and via the app's own `_ensureSession()` in `main.dart`.
+This is the entire identity story right now — there is no Apple/Google/
+Email/Phone sign-in and no account-linking flow; an anonymous user's data
+lives only as long as that device's session persists. Phase 2 (linking a
+persistent identity — Apple/Google/Email/Phone) is the next step, not yet
+started.
 
 **iOS setup notes**:
 - iOS deployment target bumped from Flutter's default 15.0 to **16.0** in
@@ -194,11 +243,30 @@ hot-reload/JIT machinery that never ships to real users. Always measure
   currently promises privacy the app doesn't provide. Must wire real
   biometric/passcode auth (and re-lock on background) before shipping —
   this is a real security gap, not a stylistic one.
-- **`ManualEntryScreen` has no UI trigger** — built and tested in
-  isolation but unreachable from the app's actual navigation (see
-  `root_shell.dart`'s `_openManualEntry`, kept alive only by
-  `// ignore: unused_element`). Needs a design decision on where "add a
-  cash transaction" lives before it can be wired in.
+- ~~`ManualEntryScreen` has no UI trigger~~ — **resolved**: `LedgerScreen`
+  now has a `FloatingActionButton` (`onAddManualEntry`) that opens it, wired
+  through `RootShell._openManualEntry` to a real `TransactionRepository.create`
+  call.
+- **No real account/identity yet.** The app only ever signs in anonymously
+  (`_ensureSession()` in `main.dart`) — there's no Apple/Google/Email/Phone
+  sign-in, no account-linking, and no profile screen (Tab 2 "Profile" in
+  `RootShell` currently just falls back to rendering the Ledger content —
+  see the comment in `root_shell.dart`'s `build()`). Losing the device/app
+  data means losing the anonymous session's data with no recovery path.
+  This is the planned Phase 2 next step, not started.
+- **`ScanScreen` still has no real camera/OCR behind it.** `RootShell._openScan`
+  pushes it with a hardcoded sample merchant/amount/category
+  (`'Corner Market'` / `18.42` / `'Groceries'`) regardless of what's on
+  screen — tapping "Add to ledger" there does not currently create a real
+  transaction row (`onAddToLedger` just pops the screen). Only Manual Entry
+  and Edit Entry actually write to Postgres today.
+- **Testing gap**: all 50 tests are unit/widget tests against in-memory
+  fakes (`lib/data/fakes.dart`); the `Supabase*Repository` implementations
+  have no automated test coverage against a real or local Supabase instance
+  — only manual/CLI verification during implementation. Worth adding
+  integration coverage (e.g. against the local `supabase start` stack)
+  before relying on RLS/schema behavior in production without a human
+  re-checking it.
 
 ## OCR/parsing spike — result (resolved)
 
@@ -311,6 +379,7 @@ everywhere that pattern appears.**
 | Logo mark | `StubLogo` (`lib/widgets/stub_logo.dart`) | torn stub + check, see DESIGN.md §7 — reuse this everywhere the mark appears (app icon, wordmark, splash), don't redraw the shape |
 | Tap feedback wrapper | `StubPressable` (`lib/widgets/stub_pressable.dart`) | scale+fade press state; `ensureMinTapSize: true` pads the hit area to 44x44 without changing the visible child — used on every tappable widget/screen instead of `InkWell` |
 | Currency formatting | `formatCurrency` (`lib/util/currency.dart`) | thousands separators, negative-safe; used everywhere a screen displays a dollar amount |
+| Period picker | `StubPeriodPicker` (`lib/widgets/stub_period_picker.dart`) | weekly/monthly/yearly/custom via `StubChip`s; custom reveals start/end `StubFieldRow`s wired to `showDatePicker`; used by `AddCategoryScreen` |
 
 Before adding a new row to this table, check the list above — the answer is
 often "reuse an existing one" rather than "add a new one."
