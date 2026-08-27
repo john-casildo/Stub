@@ -197,31 +197,11 @@ class _RootShellState extends State<RootShell> {
         if (_tabIndex == 1) {
           final totalBudgeted = data.budgets.fold<double>(0, (sum, b) => sum + b.limit);
           final totalSpent = data.budgets.fold<double>(0, (sum, b) => sum + b.spent);
-          // The real (Supabase) BudgetRepository always returns the
-          // correct, current category name — it comes from a joined view.
-          // Reconcile against data.categories here too, so a
-          // CategoryRepository/BudgetRepository pairing that doesn't
-          // (yet) know the category name at budget-creation time (as
-          // FakeBudgetRepository doesn't) still displays the right name.
-          final categoryNames = {for (final c in data.categories) c.id: c.name};
-          final budgetsWithNames = [
-            for (final b in data.budgets)
-              BudgetLimit(
-                id: b.id,
-                categoryId: b.categoryId,
-                name: categoryNames[b.categoryId] ?? b.name,
-                spent: b.spent,
-                limit: b.limit,
-                periodType: b.periodType,
-                periodStart: b.periodStart,
-                periodEnd: b.periodEnd,
-              ),
-          ];
           content = BudgetsScreen(
             monthLabel: _monthLabel(),
             totalBudgeted: totalBudgeted,
             totalSpent: totalSpent,
-            budgets: budgetsWithNames,
+            budgets: data.budgets,
             activeNavIndex: _tabIndex,
             navItems: _navItems,
             onNavTap: (i) => setState(() => _tabIndex = i),

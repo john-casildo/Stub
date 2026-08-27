@@ -68,7 +68,7 @@ void main() {
       FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'Corner Market', amount: 18.42),
     ]);
 
-    final budgets = FakeBudgetRepository();
+    final budgets = FakeBudgetRepository(null, categories);
     await budgets.create(
       categoryId: groceries.id,
       limitAmount: 300,
@@ -103,7 +103,7 @@ void main() {
   testWidgets('Deleting a category with no transactions removes it from Budgets', (tester) async {
     final categories = FakeCategoryRepository();
     final groceries = await categories.create('Groceries');
-    final budgets = FakeBudgetRepository();
+    final budgets = FakeBudgetRepository(null, categories);
     await budgets.create(categoryId: groceries.id, limitAmount: 300, periodType: BudgetPeriodType.monthly, periodStart: DateTime.now());
 
     await tester.pumpWidget(MaterialApp(home: RootShell(
@@ -127,7 +127,7 @@ void main() {
     final transactions = FakeTransactionRepository([
       FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'Corner Market'),
     ]);
-    final budgets = FakeBudgetRepository();
+    final budgets = FakeBudgetRepository(null, categories);
     await budgets.create(categoryId: groceries.id, limitAmount: 300, periodType: BudgetPeriodType.monthly, periodStart: DateTime.now());
 
     await tester.pumpWidget(MaterialApp(home: RootShell(
