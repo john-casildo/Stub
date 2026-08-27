@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../data/budget_repository.dart';
+import '../data/category_repository.dart';
+import '../data/transaction_repository.dart';
 import '../models/budget_limit.dart';
+import '../models/category.dart';
 import '../models/category_spend.dart';
 import '../models/transaction.dart';
+import '../theme/category_colors.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_icon.dart';
 import 'add_category_screen.dart';
@@ -17,33 +23,28 @@ const _navItems = [
   StubNavItem(icon: StubIcons.userCircle, label: 'Profile'),
 ];
 
-// Sample data matching mockups.html exactly — replace with real
-// Supabase-backed queries once the schema exists (CLAUDE.md's Supabase
-// section: not designed yet).
-const _sampleCategories = [
-  CategorySpend(name: 'Groceries', amount: 212.40, color: Color(0xFF0080FF)),
-  CategorySpend(name: 'Dining out', amount: 96.10, color: Color(0xFF4B7A5B)),
-  CategorySpend(name: 'Subscriptions', amount: 41.97, color: Color(0xFF8C6A2F)),
-  CategorySpend(name: 'Transport', amount: 63.25, color: Color(0xFF5B6B8C)),
+const _months = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-final _sampleRecent = [
-  Transaction(id: 't1', categoryId: 'c1', merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, occurredAt: DateTime.now()),
-  Transaction(id: 't2', categoryId: 'c2', merchant: 'Sarah K.', amount: 32.00, category: 'Dining out', source: TransactionSource.paymentApp, occurredAt: DateTime.now().subtract(const Duration(days: 1))),
-  Transaction(id: 't3', categoryId: 'c3', merchant: 'Chase Checking', amount: 14.99, category: 'Subscriptions', source: TransactionSource.bankScreenshot, occurredAt: DateTime.now().subtract(const Duration(days: 3))),
-];
+String _monthLabel() => _months[DateTime.now().month - 1];
 
-final _sampleBudgets = [
-  BudgetLimit(id: 'b1', categoryId: 'c1', name: 'Groceries', spent: 212, limit: 300, periodType: BudgetPeriodType.monthly, periodStart: DateTime(2026, 8, 1)),
-  BudgetLimit(id: 'b2', categoryId: 'c2', name: 'Dining out', spent: 96, limit: 100, periodType: BudgetPeriodType.monthly, periodStart: DateTime(2026, 8, 1)),
-  BudgetLimit(id: 'b3', categoryId: 'c3', name: 'Subscriptions', spent: 42, limit: 60, periodType: BudgetPeriodType.monthly, periodStart: DateTime(2026, 8, 1)),
-];
-
-/// Owns bottom-nav tab state and pushes the modal screens (scan, edit
-/// entry, manual entry). See the scope note in this task for what's
-/// intentionally sample data / unimplemented here.
+/// Owns bottom-nav tab state, loads real data from its repositories, and
+/// pushes the modal screens (scan, edit entry, manual entry, add
+/// category). Data is loaded once on init and reloaded after any write
+/// (`_reload`); see `_ShellData` for the shape carried between loads.
 class RootShell extends StatefulWidget {
-  const RootShell({super.key});
+  const RootShell({
+    super.key,
+    required this.categoryRepository,
+    required this.transactionRepository,
+    required this.budgetRepository,
+  });
+
+  final CategoryRepository categoryRepository;
+  final TransactionRepository transactionRepository;
+  final BudgetRepository budgetRepository;
 
   @override
   State<RootShell> createState() => _RootShellState();
@@ -51,6 +52,24 @@ class RootShell extends StatefulWidget {
 
 class _RootShellState extends State<RootShell> {
   int _tabIndex = 0;
+  late Future<_ShellData> _dataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _dataFuture = _load();
+  }
+
+  Future<_ShellData> _load() async {
+    final categories = await widget.categoryRepository.list();
+    final transactions = await widget.transactionRepository.list();
+    final budgets = await widget.budgetRepository.list();
+    return _ShellData(categories: categories, transactions: transactions, budgets: budgets);
+  }
+
+  void _reload() => setState(() {
+        _dataFuture = _load();
+      });
 
   void _openScan() {
     Navigator.of(context).push(MaterialPageRoute(
@@ -64,17 +83,28 @@ class _RootShellState extends State<RootShell> {
     ));
   }
 
-  void _openEditEntry(Transaction transaction) {
+  void _openEditEntry(Transaction transaction, List<Category> categories) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => EditEntryScreen(
         merchant: transaction.merchant,
         amount: transaction.amount,
-        categories: const ['Groceries', 'Dining', 'Household'],
+        categories: [for (final c in categories) c.name],
         selectedCategory: transaction.category,
         sourceLabel: transaction.dateLabel,
         onClose: () => Navigator.of(context).pop(),
-        onSave: (_) => Navigator.of(context).pop(),
-        onDelete: () => Navigator.of(context).pop(),
+        onSave: (selectedCategory) async {
+          final category = categories.firstWhere((c) => c.name == selectedCategory);
+          await widget.transactionRepository.update(
+            transaction.copyWith(category: selectedCategory, categoryId: category.id),
+          );
+          if (mounted) Navigator.of(context).pop();
+          _reload();
+        },
+        onDelete: () async {
+          await widget.transactionRepository.delete(transaction.id);
+          if (mounted) Navigator.of(context).pop();
+          _reload();
+        },
       ),
     ));
   }
@@ -83,62 +113,179 @@ class _RootShellState extends State<RootShell> {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => AddCategoryScreen(
         onClose: () => Navigator.of(context).pop(),
-        onSave: (name, limit, type, start, end) => Navigator.of(context).pop(),
+        onSave: (name, limitAmount, periodType, periodStart, periodEnd) async {
+          final category = await widget.categoryRepository.create(name);
+          await widget.budgetRepository.create(
+            categoryId: category.id,
+            limitAmount: limitAmount,
+            periodType: periodType,
+            periodStart: periodStart,
+            periodEnd: periodEnd,
+          );
+          if (mounted) Navigator.of(context).pop();
+          _reload();
+        },
       ),
     ));
   }
 
-  void _openManualEntry() {
+  void _openManualEntry(List<Category> categories) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ManualEntryScreen(
-        categories: const ['Groceries', 'Dining', 'Transport'],
+        categories: [for (final c in categories) c.name],
         onClose: () => Navigator.of(context).pop(),
-        onSave: (amount, merchant, category) => Navigator.of(context).pop(),
+        onSave: (amount, merchant, categoryName) async {
+          final category = categories.firstWhere((c) => c.name == categoryName);
+          await widget.transactionRepository.create(Transaction(
+            id: '',
+            categoryId: category.id,
+            merchant: merchant,
+            amount: amount,
+            category: categoryName,
+            source: TransactionSource.manual,
+            occurredAt: DateTime.now(),
+          ));
+          if (mounted) Navigator.of(context).pop();
+          _reload();
+        },
       ),
     ));
+  }
+
+  Future<void> _deleteCategory(String categoryId) async {
+    try {
+      await widget.categoryRepository.delete(categoryId);
+      _reload();
+    } on PostgrestException catch (e) {
+      if (e.code == '23503') {
+        // The ON DELETE RESTRICT rule firing — the category still has
+        // transactions pointing at it.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Can't delete a category with existing transactions.")),
+          );
+        }
+      } else {
+        rethrow;
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final Widget content;
-    if (_tabIndex == 1) {
-      content = BudgetsScreen(
-        monthLabel: 'August',
-        totalBudgeted: 2400,
-        totalSpent: 1488,
-        budgets: _sampleBudgets,
-        activeNavIndex: _tabIndex,
-        navItems: _navItems,
-        onNavTap: (i) => setState(() => _tabIndex = i),
-        onScanTap: _openScan,
-        onAddCategory: _openAddCategory,
-      );
-    } else {
-      // Tab 2 (Profile) has no screen in the original mockup set — falls
-      // back to Ledger content until a Profile screen is designed. The nav
-      // bar highlight must agree with what's actually on screen, so it's
-      // forced to Home (0) here rather than passed through as Profile (2).
-      content = LedgerScreen(
-        monthLabel: 'August',
-        leftToSpend: 1842.30,
-        leftToSpendFraction: 0.674,
-        categories: _sampleCategories,
-        recent: _sampleRecent,
-        activeNavIndex: _tabIndex == 2 ? 0 : _tabIndex,
-        navItems: _navItems,
-        onNavTap: (i) => setState(() => _tabIndex = i),
-        onScanTap: _openScan,
-        onAddManualEntry: _openManualEntry,
-        onTransactionTap: _openEditEntry,
-      );
-    }
+    return FutureBuilder<_ShellData>(
+      future: _dataFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Something went wrong loading your data.'),
+                TextButton(onPressed: _reload, child: const Text('Retry')),
+              ],
+            ),
+          );
+        }
 
-    // Keyed by which screen is showing (not the raw tab index) so Home<->
-    // Profile — which render identical Ledger content — never cross-fades
-    // against itself.
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      child: KeyedSubtree(key: ValueKey(_tabIndex == 1 ? 'budgets' : 'ledger'), child: content),
+        final data = snapshot.data!;
+        final Widget content;
+
+        if (_tabIndex == 1) {
+          final totalBudgeted = data.budgets.fold<double>(0, (sum, b) => sum + b.limit);
+          final totalSpent = data.budgets.fold<double>(0, (sum, b) => sum + b.spent);
+          // The real (Supabase) BudgetRepository always returns the
+          // correct, current category name — it comes from a joined view.
+          // Reconcile against data.categories here too, so a
+          // CategoryRepository/BudgetRepository pairing that doesn't
+          // (yet) know the category name at budget-creation time (as
+          // FakeBudgetRepository doesn't) still displays the right name.
+          final categoryNames = {for (final c in data.categories) c.id: c.name};
+          final budgetsWithNames = [
+            for (final b in data.budgets)
+              BudgetLimit(
+                id: b.id,
+                categoryId: b.categoryId,
+                name: categoryNames[b.categoryId] ?? b.name,
+                spent: b.spent,
+                limit: b.limit,
+                periodType: b.periodType,
+                periodStart: b.periodStart,
+                periodEnd: b.periodEnd,
+              ),
+          ];
+          content = BudgetsScreen(
+            monthLabel: _monthLabel(),
+            totalBudgeted: totalBudgeted,
+            totalSpent: totalSpent,
+            budgets: budgetsWithNames,
+            activeNavIndex: _tabIndex,
+            navItems: _navItems,
+            onNavTap: (i) => setState(() => _tabIndex = i),
+            onScanTap: _openScan,
+            onAddCategory: _openAddCategory,
+            onDeleteCategory: _deleteCategory,
+          );
+        } else {
+          // Tab 2 (Profile) has no screen in the original mockup set —
+          // falls back to Ledger content until a Profile screen is
+          // designed. The nav bar highlight must agree with what's
+          // actually on screen, so it's forced to Home (0) here rather
+          // than passed through as Profile (2).
+          final totalLimit = data.budgets.fold<double>(0, (sum, b) => sum + b.limit);
+          final totalSpent = data.budgets.fold<double>(0, (sum, b) => sum + b.spent);
+          final leftToSpend = totalLimit - totalSpent;
+          final leftToSpendFraction = totalLimit == 0 ? 0.0 : (1 - totalSpent / totalLimit).clamp(0.0, 1.0);
+
+          // CategorySpend (and its per-category color) needs
+          // Theme.of(context).brightness, which only exists here inside
+          // build() — not inside the async _load() above, which runs
+          // before any widget tree exists.
+          final brightness = Theme.of(context).brightness;
+          final categorySpends = <CategorySpend>[
+            for (var i = 0; i < data.categories.length; i++)
+              CategorySpend(
+                name: data.categories[i].name,
+                amount: data.transactions
+                    .where((t) => t.categoryId == data.categories[i].id)
+                    .fold<double>(0, (sum, t) => sum + t.amount),
+                color: categoryColor(i, brightness),
+              ),
+          ];
+
+          content = LedgerScreen(
+            monthLabel: _monthLabel(),
+            leftToSpend: leftToSpend,
+            leftToSpendFraction: leftToSpendFraction,
+            categories: categorySpends,
+            recent: data.transactions,
+            activeNavIndex: _tabIndex == 2 ? 0 : _tabIndex,
+            navItems: _navItems,
+            onNavTap: (i) => setState(() => _tabIndex = i),
+            onScanTap: _openScan,
+            onAddManualEntry: () => _openManualEntry(data.categories),
+            onTransactionTap: (t) => _openEditEntry(t, data.categories),
+          );
+        }
+
+        // Keyed by which screen is showing (not the raw tab index) so
+        // Home<->Profile — which render identical Ledger content — never
+        // cross-fades against itself.
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: KeyedSubtree(key: ValueKey(_tabIndex == 1 ? 'budgets' : 'ledger'), child: content),
+        );
+      },
     );
   }
+}
+
+class _ShellData {
+  const _ShellData({required this.categories, required this.transactions, required this.budgets});
+  final List<Category> categories;
+  final List<Transaction> transactions;
+  final List<BudgetLimit> budgets;
 }

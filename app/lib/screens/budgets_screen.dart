@@ -6,6 +6,7 @@ import '../util/currency.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_card.dart';
 import '../widgets/stub_hero_amount.dart';
+import '../widgets/stub_icon.dart';
 import '../widgets/stub_pressable.dart';
 import '../widgets/stub_progress_bar.dart';
 
@@ -21,6 +22,7 @@ class BudgetsScreen extends StatelessWidget {
     required this.onNavTap,
     required this.onScanTap,
     required this.onAddCategory,
+    required this.onDeleteCategory,
   });
 
   final String monthLabel;
@@ -32,6 +34,7 @@ class BudgetsScreen extends StatelessWidget {
   final ValueChanged<int> onNavTap;
   final VoidCallback onScanTap;
   final VoidCallback onAddCategory;
+  final ValueChanged<String> onDeleteCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +84,9 @@ class BudgetsScreen extends StatelessWidget {
                     const SizedBox(height: 10),
                     StubCard(
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-                      child: Column(children: [for (final b in budgets) _BudgetRow(budget: b)]),
+                      child: Column(children: [
+                        for (final b in budgets) _BudgetRow(budget: b, onDelete: () => onDeleteCategory(b.categoryId)),
+                      ]),
                     ),
                     const SizedBox(height: 14),
                     StubPressable(
@@ -111,8 +116,9 @@ class BudgetsScreen extends StatelessWidget {
 }
 
 class _BudgetRow extends StatelessWidget {
-  const _BudgetRow({required this.budget});
+  const _BudgetRow({required this.budget, required this.onDelete});
   final BudgetLimit budget;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -129,8 +135,13 @@ class _BudgetRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(budget.name, style: StubText.archivo(fontSize: 14, fontWeight: FontWeight.w600, color: ink)),
+              Expanded(child: Text(budget.name, style: StubText.archivo(fontSize: 14, fontWeight: FontWeight.w600, color: ink))),
               Text('${formatCurrency(budget.spent)} / ${formatCurrency(budget.limit)}', style: StubText.unbounded(fontSize: 13, color: ink)),
+              IconButton(
+                key: Key('delete-category-${budget.categoryId}'),
+                icon: StubIcon(StubIcons.x, size: 14, color: ink.withValues(alpha: 0.4)),
+                onPressed: onDelete,
+              ),
             ],
           ),
           const SizedBox(height: 8),
