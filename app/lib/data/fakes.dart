@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math';
+import 'account_link_service.dart';
 import 'budget_repository.dart';
 import 'category_repository.dart';
 import 'transaction_repository.dart';
@@ -104,4 +106,26 @@ class FakeBudgetRepository implements BudgetRepository {
       periodEnd: periodEnd,
     ));
   }
+}
+
+class FakeAccountLinkService implements AccountLinkService {
+  FakeAccountLinkService({bool isAnonymous = true, this.linkedEmail}) : _isAnonymous = isAnonymous;
+  bool _isAnonymous;
+  @override
+  String? linkedEmail;
+
+  final _controller = StreamController<bool>.broadcast();
+
+  @override
+  bool get isAnonymous => _isAnonymous;
+
+  @override
+  Future<void> linkEmail(String email) async {
+    linkedEmail = email;
+    _isAnonymous = false;
+    _controller.add(_isAnonymous);
+  }
+
+  @override
+  Stream<bool> get linkStatusChanges => _controller.stream;
 }

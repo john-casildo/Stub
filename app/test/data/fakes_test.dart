@@ -34,4 +34,27 @@ void main() {
     );
     expect((await repo.list()).first.limit, 300);
   });
+
+  test('FakeAccountLinkService starts anonymous and can link an email', () async {
+    final service = FakeAccountLinkService();
+    expect(service.isAnonymous, isTrue);
+    expect(service.linkedEmail, isNull);
+
+    await service.linkEmail('me@example.com');
+
+    expect(service.isAnonymous, isFalse);
+    expect(service.linkedEmail, 'me@example.com');
+  });
+
+  test('FakeAccountLinkService.linkStatusChanges emits after linking', () async {
+    final service = FakeAccountLinkService();
+    final events = <bool>[];
+    final sub = service.linkStatusChanges.listen(events.add);
+
+    await service.linkEmail('me@example.com');
+    await Future<void>.delayed(Duration.zero); // let the stream deliver
+
+    expect(events, [false]); // isAnonymous became false
+    await sub.cancel();
+  });
 }
