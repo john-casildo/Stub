@@ -15,8 +15,8 @@ void main() {
           leftToSpend: 1842.30,
           leftToSpendFraction: 0.674,
           categories: const [CategorySpend(name: 'Groceries', amount: 212.40, color: Colors.blue)],
-          recent: const [
-            Transaction(merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, dateLabel: 'Today'),
+          recent: [
+            Transaction(id: 't1', categoryId: 'c1', merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, occurredAt: DateTime.now()),
           ],
           activeNavIndex: 0,
           navItems: const [

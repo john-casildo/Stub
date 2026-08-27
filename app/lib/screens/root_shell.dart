@@ -26,16 +26,16 @@ const _sampleCategories = [
   CategorySpend(name: 'Transport', amount: 63.25, color: Color(0xFF5B6B8C)),
 ];
 
-const _sampleRecent = [
-  Transaction(merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, dateLabel: 'Today'),
-  Transaction(merchant: 'Sarah K.', amount: 32.00, category: 'Dining out', source: TransactionSource.paymentApp, dateLabel: 'Yesterday'),
-  Transaction(merchant: 'Chase Checking', amount: 14.99, category: 'Subscriptions', source: TransactionSource.bankScreenshot, dateLabel: 'Mon'),
+final _sampleRecent = [
+  Transaction(id: 't1', categoryId: 'c1', merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, occurredAt: DateTime.now()),
+  Transaction(id: 't2', categoryId: 'c2', merchant: 'Sarah K.', amount: 32.00, category: 'Dining out', source: TransactionSource.paymentApp, occurredAt: DateTime.now().subtract(const Duration(days: 1))),
+  Transaction(id: 't3', categoryId: 'c3', merchant: 'Chase Checking', amount: 14.99, category: 'Subscriptions', source: TransactionSource.bankScreenshot, occurredAt: DateTime.now().subtract(const Duration(days: 3))),
 ];
 
-const _sampleBudgets = [
-  BudgetLimit(name: 'Groceries', spent: 212, limit: 300),
-  BudgetLimit(name: 'Dining out', spent: 96, limit: 100),
-  BudgetLimit(name: 'Subscriptions', spent: 42, limit: 60),
+final _sampleBudgets = [
+  BudgetLimit(id: 'b1', categoryId: 'c1', name: 'Groceries', spent: 212, limit: 300, periodType: BudgetPeriodType.monthly, periodStart: DateTime(2026, 8, 1)),
+  BudgetLimit(id: 'b2', categoryId: 'c2', name: 'Dining out', spent: 96, limit: 100, periodType: BudgetPeriodType.monthly, periodStart: DateTime(2026, 8, 1)),
+  BudgetLimit(id: 'b3', categoryId: 'c3', name: 'Subscriptions', spent: 42, limit: 60, periodType: BudgetPeriodType.monthly, periodStart: DateTime(2026, 8, 1)),
 ];
 
 /// Owns bottom-nav tab state and pushes the modal screens (scan, edit

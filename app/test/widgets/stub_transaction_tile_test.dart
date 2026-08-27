@@ -6,15 +6,17 @@ import 'package:stub/widgets/stub_transaction_tile.dart';
 
 void main() {
   testWidgets('StubTransactionTile shows merchant, source, and amount', (tester) async {
-    const transaction = Transaction(
+    final transaction = Transaction(
+      id: 't1',
+      categoryId: 'c1',
       merchant: 'Corner Market',
       amount: 18.42,
       category: 'Groceries',
       source: TransactionSource.receipt,
-      dateLabel: 'Today',
+      occurredAt: DateTime.now(),
     );
     await tester.pumpWidget(
-      const MaterialApp(home: StubTransactionTile(transaction: transaction)),
+      MaterialApp(home: StubTransactionTile(transaction: transaction)),
     );
     expect(find.text('Corner Market'), findsOneWidget);
     expect(find.textContaining('RECEIPT'), findsOneWidget);

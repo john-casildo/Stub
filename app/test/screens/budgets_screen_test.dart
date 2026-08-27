@@ -13,7 +13,17 @@ void main() {
           monthLabel: 'August',
           totalBudgeted: 2400,
           totalSpent: 1488,
-          budgets: const [BudgetLimit(name: 'Groceries', spent: 212, limit: 300)],
+          budgets: [
+            BudgetLimit(
+              id: 'b1',
+              categoryId: 'c1',
+              name: 'Groceries',
+              spent: 212,
+              limit: 300,
+              periodType: BudgetPeriodType.monthly,
+              periodStart: DateTime(2026, 8, 1),
+            ),
+          ],
           activeNavIndex: 1,
           navItems: const [
             StubNavItem(icon: StubIcons.home, label: 'Home'),
