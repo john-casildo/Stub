@@ -8,3 +8,5 @@ app/*.iml
 app/.idea/
 .superpowers/
 *.DS_Store
+app/supabase/.branches/
+app/supabase/.temp/start-secrets/
