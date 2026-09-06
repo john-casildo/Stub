@@ -117,6 +117,81 @@ class _RootShellState extends State<RootShell> {
     ));
   }
 
+  void _openSettings(_ShellData data) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => SettingsScreen(
+        localPrefs: widget.localPrefs,
+        themeModeNotifier: widget.themeModeNotifier,
+        onClose: () => Navigator.of(context).pop(),
+        onExportData: () => _exportData(data.transactions),
+        onDeleteAllData: () => _deleteAllData(data),
+      ),
+    ));
+  }
+
+  /// `exportTransactionsCsv` does real I/O (temp file write + OS share
+  /// sheet) and can fail — unlike every other write in this file, it's
+  /// not a Postgrest call, so it doesn't go through `_guardedWrite`; a
+  /// plain try/catch + snackbar is the right shape here.
+  Future<void> _exportData(List<Transaction> transactions) async {
+    try {
+      await exportTransactionsCsv(transactions);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not export data. Please try again.')),
+        );
+      }
+    }
+  }
+
+  /// `SupabaseTransactionRepository.list()` is capped by PostgREST's
+  /// `max_rows` (1000) — a single pass over the already-loaded
+  /// `data.transactions` snapshot would silently under-delete for a user
+  /// with more rows than that. Instead, re-list and delete repeatedly
+  /// until `list()` comes back empty, which is correct regardless of row
+  /// count. Categories have no such cap concern in practice, so a single
+  /// pass over the loaded snapshot is fine for those.
+  ///
+  /// Blocks the UI with a non-dismissible dialog for the duration so the
+  /// user can't tap Settings' close button (or anything else) mid-delete,
+  /// which could otherwise pop the wrong route once the operation
+  /// finishes.
+  Future<void> _deleteAllData(_ShellData data) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      var batch = await widget.transactionRepository.list();
+      while (batch.isNotEmpty) {
+        for (final t in batch) {
+          await widget.transactionRepository.delete(t.id);
+        }
+        batch = await widget.transactionRepository.list();
+      }
+      for (final c in data.categories) {
+        await widget.categoryRepository.delete(c.id);
+      }
+      if (mounted) Navigator.of(context).pop(); // dismiss the loading dialog
+      if (mounted) Navigator.of(context).pop(); // pop Settings back to Profile
+      if (mounted) _reload();
+    } on PostgrestException catch (e) {
+      if (mounted) Navigator.of(context).pop(); // dismiss the loading dialog
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyMessage(e))));
+      }
+    } catch (_) {
+      if (mounted) Navigator.of(context).pop(); // dismiss the loading dialog
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Something went wrong. Please try again.')),
+        );
+      }
+    }
+  }
+
   void _openAddCategory() {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => AddCategoryScreen(
@@ -251,22 +326,7 @@ class _RootShellState extends State<RootShell> {
             navItems: _navItems,
             onNavTap: (i) => setState(() => _tabIndex = i),
             onScanTap: _openScan,
-            onOpenSettings: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => SettingsScreen(
-                localPrefs: widget.localPrefs,
-                themeModeNotifier: widget.themeModeNotifier,
-                onClose: () => Navigator.of(context).pop(),
-                onExportData: () => exportTransactionsCsv(data.transactions),
-                onDeleteAllData: () => _guardedWrite(() async {
-                  for (final t in data.transactions) {
-                    await widget.transactionRepository.delete(t.id);
-                  }
-                  for (final c in data.categories) {
-                    await widget.categoryRepository.delete(c.id);
-                  }
-                }, onSuccess: () => Navigator.of(context).pop()),
-              ),
-            )),
+            onOpenSettings: () => _openSettings(data),
           );
         } else {
           final totalLimit = data.budgets.fold<double>(0, (sum, b) => sum + b.limit);

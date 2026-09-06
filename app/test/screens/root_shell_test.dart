@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,6 +14,8 @@ import 'package:stub/models/category.dart';
 import 'package:stub/models/transaction.dart';
 import 'package:stub/screens/root_shell.dart';
 import 'package:stub/widgets/stub_bottom_nav.dart';
+
+const _pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
 
 void main() {
   setUp(() {
@@ -107,6 +112,129 @@ void main() {
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
     expect(find.text('Corner Market'), findsNothing);
+  });
+
+  testWidgets('Delete-all loops list() until empty, deleting transactions beyond a single page', (tester) async {
+    final categories = FakeCategoryRepository();
+    final groceries = await categories.create('Groceries');
+    // Seed more transactions than a single "page" to prove the delete-all
+    // loop re-lists rather than relying on the snapshot loaded at open time.
+    final transactions = _PagedFakeTransactionRepository(
+      List.generate(
+        5,
+        (i) => FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'Merchant $i', amount: 1),
+      ),
+      pageSize: 2,
+    );
+    final budgets = FakeBudgetRepository(null, categories);
+    await budgets.create(categoryId: groceries.id, limitAmount: 300, periodType: BudgetPeriodType.monthly, periodStart: DateTime.now());
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: transactions,
+      budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete all data'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete everything'));
+    await tester.pumpAndSettle();
+
+    // All 5 transactions gone, even though the repository only ever
+    // returns 2 per `list()` call — proves the delete loop kept going
+    // rather than stopping after one pass.
+    expect(await transactions.list(), isEmpty);
+  });
+
+  testWidgets('Delete-all shows a non-dismissible blocking indicator while in flight', (tester) async {
+    final categories = FakeCategoryRepository();
+    final groceries = await categories.create('Groceries');
+    final transactions = _SlowFakeTransactionRepository([
+      FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'Corner Market'),
+    ]);
+    final budgets = FakeBudgetRepository(null, categories);
+    await budgets.create(categoryId: groceries.id, limitAmount: 300, periodType: BudgetPeriodType.monthly, periodStart: DateTime.now());
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: transactions,
+      budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete all data'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete everything'));
+    // Let the confirm dialog's pop() resolve, run `_deleteAllData`
+    // (which pushes the loading dialog), and let that dialog's own push
+    // transition finish. The delete itself is still stuck on the gate,
+    // so this can't be `pumpAndSettle` (the indeterminate progress
+    // indicator's animation never settles).
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Blocking dialog is up, and Settings' own close (X) button is no
+    // longer reachable through it (the dialog's barrier absorbs taps).
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing); // confirm dialog already dismissed
+    expect(find.text('THEME'), findsOneWidget); // Settings is still the route underneath
+
+    await transactions.releaseAll();
+    await tester.pumpAndSettle();
+
+    // Dialog gone, Settings popped back to Profile, delete completed.
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('THEME'), findsNothing);
+  });
+
+  testWidgets('A failed export shows a friendly message instead of failing silently', (tester) async {
+    // `exportTransactionsCsv` calls path_provider's platform channel to
+    // find a temp directory; mock it to fail, exercising the same
+    // failure path a real file-system/plugin error would take in
+    // production, without depending on real OS-level plugin behavior.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      _pathProviderChannel,
+      (call) async => throw PlatformException(code: 'error', message: 'no temp directory'),
+    );
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_pathProviderChannel, null));
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: FakeCategoryRepository(),
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Export data'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not export data. Please try again.'), findsOneWidget);
   });
 
   testWidgets('Switching tabs cross-fades cleanly and settles on the new screen only', (tester) async {
@@ -315,6 +443,69 @@ class _RestrictingCategoryRepository implements CategoryRepository {
       throw PostgrestException(code: '23503', message: 'update or delete on table "categories" violates foreign key constraint');
     }
     await _categories.delete(id);
+  }
+}
+
+/// Mimics PostgREST's `max_rows` cap: `list()` only ever returns up to
+/// [pageSize] items at a time (whatever remains after prior deletes), so a
+/// caller that stops after a single `list()`/delete pass will always leave
+/// items behind. Used to prove `RootShell._deleteAllData` loops until
+/// `list()` comes back empty rather than trusting one snapshot.
+class _PagedFakeTransactionRepository implements TransactionRepository {
+  _PagedFakeTransactionRepository(List<Transaction> seed, {required this.pageSize}) : _items = List.of(seed);
+  final List<Transaction> _items;
+  final int pageSize;
+
+  @override
+  Future<List<Transaction>> list() async => List.unmodifiable(_items.take(pageSize));
+
+  @override
+  Future<Transaction> create(Transaction transaction) async {
+    _items.add(transaction);
+    return transaction;
+  }
+
+  @override
+  Future<void> update(Transaction transaction) async {
+    final index = _items.indexWhere((t) => t.id == transaction.id);
+    if (index != -1) _items[index] = transaction;
+  }
+
+  @override
+  Future<void> delete(String id) async => _items.removeWhere((t) => t.id == id);
+}
+
+/// Delays every `delete()` until the test explicitly calls [releaseAll],
+/// so a test can assert on UI state (e.g. a blocking dialog) while a
+/// delete-all operation is still in flight.
+class _SlowFakeTransactionRepository implements TransactionRepository {
+  _SlowFakeTransactionRepository(List<Transaction> seed) : _items = List.of(seed);
+  final List<Transaction> _items;
+  final _gate = Completer<void>();
+
+  Future<void> releaseAll() async {
+    if (!_gate.isCompleted) _gate.complete();
+  }
+
+  @override
+  Future<List<Transaction>> list() async => List.unmodifiable(_items);
+
+  @override
+  Future<Transaction> create(Transaction transaction) async {
+    _items.add(transaction);
+    return transaction;
+  }
+
+  @override
+  Future<void> update(Transaction transaction) async {
+    final index = _items.indexWhere((t) => t.id == transaction.id);
+    if (index != -1) _items[index] = transaction;
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    await _gate.future;
+    _items.removeWhere((t) => t.id == id);
   }
 }
 
