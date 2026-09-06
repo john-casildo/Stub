@@ -22,12 +22,15 @@ Future<void> main() async {
     publishableKey: SupabaseConfig.publishableKey,
   );
   await _ensureSession();
+  final localPrefs = LocalPrefs();
+  final themeModeNotifier = ValueNotifier<ThemeMode>(await localPrefs.themeMode());
   runApp(StubApp(
     categoryRepository: SupabaseCategoryRepository(Supabase.instance.client),
     transactionRepository: SupabaseTransactionRepository(Supabase.instance.client),
     budgetRepository: SupabaseBudgetRepository(Supabase.instance.client),
     accountLinkService: SupabaseAccountLinkService(Supabase.instance.client),
-    localPrefs: LocalPrefs(),
+    localPrefs: localPrefs,
+    themeModeNotifier: themeModeNotifier,
   ));
 }
 
@@ -46,6 +49,7 @@ class StubApp extends StatelessWidget {
     required this.budgetRepository,
     required this.accountLinkService,
     required this.localPrefs,
+    required this.themeModeNotifier,
   });
 
   final CategoryRepository categoryRepository;
@@ -53,21 +57,26 @@ class StubApp extends StatelessWidget {
   final BudgetRepository budgetRepository;
   final AccountLinkService accountLinkService;
   final LocalPrefs localPrefs;
+  final ValueNotifier<ThemeMode> themeModeNotifier;
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Stub',
-      debugShowCheckedModeBanner: false,
-      theme: StubTheme.light(),
-      darkTheme: StubTheme.dark(),
-      themeMode: ThemeMode.system,
-      home: _LockGate(
-        categoryRepository: categoryRepository,
-        transactionRepository: transactionRepository,
-        budgetRepository: budgetRepository,
-        accountLinkService: accountLinkService,
-        localPrefs: localPrefs,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (context, mode, _) => MaterialApp(
+        title: 'Stub',
+        debugShowCheckedModeBanner: false,
+        theme: StubTheme.light(),
+        darkTheme: StubTheme.dark(),
+        themeMode: mode,
+        home: _LockGate(
+          categoryRepository: categoryRepository,
+          transactionRepository: transactionRepository,
+          budgetRepository: budgetRepository,
+          accountLinkService: accountLinkService,
+          localPrefs: localPrefs,
+          themeModeNotifier: themeModeNotifier,
+        ),
       ),
     );
   }
@@ -85,6 +94,7 @@ class _LockGate extends StatefulWidget {
     required this.budgetRepository,
     required this.accountLinkService,
     required this.localPrefs,
+    required this.themeModeNotifier,
   });
 
   final CategoryRepository categoryRepository;
@@ -92,6 +102,7 @@ class _LockGate extends StatefulWidget {
   final BudgetRepository budgetRepository;
   final AccountLinkService accountLinkService;
   final LocalPrefs localPrefs;
+  final ValueNotifier<ThemeMode> themeModeNotifier;
 
   @override
   State<_LockGate> createState() => _LockGateState();

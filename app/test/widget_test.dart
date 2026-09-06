@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
@@ -39,6 +40,7 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       localPrefs: LocalPrefs(),
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
     ));
 
     expect(find.text('Stub is locked'), findsOneWidget);
@@ -56,6 +58,7 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       localPrefs: LocalPrefs(),
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
     ));
 
     await tester.tap(find.text('Unlock with Face ID'));
@@ -84,6 +87,7 @@ void main() {
         budgetRepository: FakeBudgetRepository(),
         accountLinkService: FakeAccountLinkService(),
         localPrefs: LocalPrefs(),
+        themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
       ));
 
       await tester.tap(find.text('Unlock with Face ID'));
@@ -95,4 +99,31 @@ void main() {
       expect(find.text('Back up your data'), findsNothing);
     },
   );
+
+  testWidgets('themeModeNotifier drives MaterialApp.themeMode live', (tester) async {
+    SharedPreferences.setMockInitialValues({'has_seen_backup_prompt': true});
+    final notifier = ValueNotifier<ThemeMode>(ThemeMode.dark);
+
+    await tester.pumpWidget(StubApp(
+      categoryRepository: FakeCategoryRepository(),
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      localPrefs: LocalPrefs(),
+      themeModeNotifier: notifier,
+    ));
+
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+      ThemeMode.dark,
+    );
+
+    notifier.value = ThemeMode.light;
+    await tester.pump();
+
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
+      ThemeMode.light,
+    );
+  });
 }
