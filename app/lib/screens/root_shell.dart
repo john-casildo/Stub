@@ -123,18 +123,36 @@ class _RootShellState extends State<RootShell> {
         localPrefs: widget.localPrefs,
         themeModeNotifier: widget.themeModeNotifier,
         onClose: () => Navigator.of(context).pop(),
-        onExportData: () => _exportData(data.transactions),
+        onExportData: _exportData,
         onDeleteAllData: () => _deleteAllData(data),
       ),
     ));
+  }
+
+  /// `SupabaseTransactionRepository.list()` is capped by PostgREST's
+  /// `max_rows` (1000) — a single call would silently omit any rows beyond
+  /// the first page for a user with more transactions than that. Page
+  /// through with `offset` until an empty page comes back, which is correct
+  /// regardless of row count. Shared by `_exportData` (collects) and
+  /// `_deleteAllData` (deletes as it goes, so its own loop re-lists from
+  /// offset 0 each time instead of using this helper — see that method).
+  Future<List<Transaction>> _fetchAllTransactions() async {
+    final all = <Transaction>[];
+    var batch = await widget.transactionRepository.list(offset: all.length);
+    while (batch.isNotEmpty) {
+      all.addAll(batch);
+      batch = await widget.transactionRepository.list(offset: all.length);
+    }
+    return all;
   }
 
   /// `exportTransactionsCsv` does real I/O (temp file write + OS share
   /// sheet) and can fail — unlike every other write in this file, it's
   /// not a Postgrest call, so it doesn't go through `_guardedWrite`; a
   /// plain try/catch + snackbar is the right shape here.
-  Future<void> _exportData(List<Transaction> transactions) async {
+  Future<void> _exportData() async {
     try {
+      final transactions = await _fetchAllTransactions();
       await exportTransactionsCsv(transactions);
     } catch (_) {
       if (mounted) {
@@ -145,18 +163,21 @@ class _RootShellState extends State<RootShell> {
     }
   }
 
-  /// `SupabaseTransactionRepository.list()` is capped by PostgREST's
-  /// `max_rows` (1000) — a single pass over the already-loaded
-  /// `data.transactions` snapshot would silently under-delete for a user
-  /// with more rows than that. Instead, re-list and delete repeatedly
-  /// until `list()` comes back empty, which is correct regardless of row
-  /// count. Categories have no such cap concern in practice, so a single
-  /// pass over the loaded snapshot is fine for those.
+  /// See `_fetchAllTransactions` for why this can't just read
+  /// `data.transactions` — instead it re-lists (from offset 0, since each
+  /// delete shrinks what offset 0 returns) and deletes repeatedly until
+  /// `list()` comes back empty. Categories have no such cap concern in
+  /// practice, so a single pass over the loaded snapshot is fine for those.
   ///
   /// Blocks the UI with a non-dismissible dialog for the duration so the
   /// user can't tap Settings' close button (or anything else) mid-delete,
   /// which could otherwise pop the wrong route once the operation
   /// finishes.
+  ///
+  /// Both error branches reload before showing their snackbar: the delete
+  /// loop may have already removed hundreds of rows before failing, so
+  /// leaving the stale pre-delete snapshot on screen would show phantom
+  /// data until some unrelated write happened to trigger a reload.
   Future<void> _deleteAllData(_ShellData data) async {
     showDialog<void>(
       context: context,
@@ -179,11 +200,13 @@ class _RootShellState extends State<RootShell> {
       if (mounted) _reload();
     } on PostgrestException catch (e) {
       if (mounted) Navigator.of(context).pop(); // dismiss the loading dialog
+      if (mounted) _reload();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyMessage(e))));
       }
     } catch (_) {
       if (mounted) Navigator.of(context).pop(); // dismiss the loading dialog
+      if (mounted) _reload();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Something went wrong. Please try again.')),

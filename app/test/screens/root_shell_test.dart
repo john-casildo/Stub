@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +17,7 @@ import 'package:stub/screens/root_shell.dart';
 import 'package:stub/widgets/stub_bottom_nav.dart';
 
 const _pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
+const _shareChannel = MethodChannel('dev.fluttercommunity.plus/share');
 
 void main() {
   setUp(() {
@@ -237,6 +239,87 @@ void main() {
     expect(find.text('Could not export data. Please try again.'), findsOneWidget);
   });
 
+  testWidgets('Export data collects transactions beyond a single page, not just the first page', (tester) async {
+    // Real temp dir so `exportTransactionsCsv`'s file write and share_plus's
+    // "file already has a real path" fast path both succeed for real,
+    // letting us read back the CSV that was actually written. Real
+    // `dart:io` calls like this one need `runAsync` inside a `testWidgets`
+    // body — see the comment further down, by the export tap, for why.
+    late Directory tempDir;
+    await tester.runAsync(() async {
+      tempDir = await Directory.systemTemp.createTemp('stub_export_test');
+    });
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      _pathProviderChannel,
+      (call) async => tempDir.path,
+    );
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_pathProviderChannel, null));
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      _shareChannel,
+      (call) async => 'dev.fluttercommunity.plus/share/success',
+    );
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_shareChannel, null));
+
+    final categories = FakeCategoryRepository();
+    final groceries = await categories.create('Groceries');
+    // Seed more transactions than a single "page" — mimics PostgREST's
+    // `max_rows` cap (see `SupabaseTransactionRepository`) via an offset-aware
+    // fake, so a caller that stops after the first `list()` call would
+    // silently drop the rest.
+    final transactions = _OffsetPagedFakeTransactionRepository(
+      List.generate(
+        5,
+        (i) => FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'Merchant $i', amount: 1),
+      ),
+      pageSize: 2,
+    );
+    final budgets = FakeBudgetRepository(null, categories);
+    await budgets.create(categoryId: groceries.id, limitAmount: 300, periodType: BudgetPeriodType.monthly, periodStart: DateTime.now());
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: transactions,
+      budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    // `_exportData` does real `dart:io` work (temp file write, then
+    // share_plus's own file copy) — under `testWidgets`' default fake-async
+    // zone, real I/O like this never completes (nothing drives the real
+    // event loop), so the tap that kicks it off has to run inside
+    // `runAsync`, which switches to a real zone for its duration. See
+    // `exportTransactionsCsv`/`_fetchAllTransactions` in `root_shell.dart`.
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Export data'));
+      // Give the fire-and-forget `_exportData()` future — kicked off by the
+      // tap above but not awaited by the widget itself — a real chance to
+      // run to completion before we move on to read its output.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pump();
+
+    late String csvContent;
+    await tester.runAsync(() async {
+      csvContent = await File('${tempDir.path}/stub_transactions.csv').readAsString();
+    });
+    for (var i = 0; i < 5; i++) {
+      expect(csvContent, contains('Merchant $i'), reason: 'Merchant $i missing — export truncated at the first page');
+    }
+  });
+
   testWidgets('Switching tabs cross-fades cleanly and settles on the new screen only', (tester) async {
     await tester.pumpWidget(MaterialApp(home: RootShell(
       categoryRepository: FakeCategoryRepository(),
@@ -377,6 +460,70 @@ void main() {
     expect(find.text('tap to type an amount'), findsOneWidget);
   });
 
+  testWidgets('A delete-all failure partway through reloads so the UI reflects actually-remaining data', (tester) async {
+    final categories = FakeCategoryRepository();
+    final groceries = await categories.create('Groceries');
+    // Three transactions; the repository below lets the first delete
+    // succeed and throws on the second, so the delete loop stops with one
+    // transaction gone and two still present — proving the error branch's
+    // `_reload()` picks up that actual remainder instead of leaving the
+    // stale pre-delete snapshot (all three) on screen.
+    final transactions = _FailingAfterNDeletesTransactionRepository(
+      [
+        FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'First', amount: 1),
+        FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'Second', amount: 1),
+        FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'Third', amount: 1),
+      ],
+      failAt: 2,
+    );
+    final budgets = FakeBudgetRepository(null, categories);
+    await budgets.create(categoryId: groceries.id, limitAmount: 300, periodType: BudgetPeriodType.monthly, periodStart: DateTime.now());
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: transactions,
+      budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete all data'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete everything'));
+    await tester.pumpAndSettle();
+
+    // Failure surfaced, and we're still on Settings (error branch doesn't
+    // pop back to Profile the way the success branch does).
+    expect(find.textContaining('Something went wrong'), findsOneWidget);
+    expect(find.text('THEME'), findsOneWidget);
+
+    // The snackbar is shown via the app-level `ScaffoldMessenger` (RootShell
+    // itself has no `Scaffold`), so it floats above whatever tab is showing
+    // and outlives the Settings route it was triggered from — let its
+    // default ~4s auto-dismiss actually elapse before navigating further,
+    // or it can still be sitting over the bottom nav and absorb later taps.
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    // Settings' own close (X) button is the only IconButton on this screen.
+    await tester.tap(find.byType(IconButton));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('First'), findsNothing); // actually deleted
+    expect(find.text('Second'), findsOneWidget); // delete failed on this one — still present
+    expect(find.text('Third'), findsOneWidget); // never attempted — still present
+  });
+
   testWidgets('Deleting a category with existing transactions shows a blocked-delete message', (tester) async {
     final categories = FakeCategoryRepository();
     final groceries = await categories.create('Groceries');
@@ -457,7 +604,38 @@ class _PagedFakeTransactionRepository implements TransactionRepository {
   final int pageSize;
 
   @override
-  Future<List<Transaction>> list() async => List.unmodifiable(_items.take(pageSize));
+  Future<List<Transaction>> list({int offset = 0}) async => List.unmodifiable(_items.take(pageSize));
+
+  @override
+  Future<Transaction> create(Transaction transaction) async {
+    _items.add(transaction);
+    return transaction;
+  }
+
+  @override
+  Future<void> update(Transaction transaction) async {
+    final index = _items.indexWhere((t) => t.id == transaction.id);
+    if (index != -1) _items[index] = transaction;
+  }
+
+  @override
+  Future<void> delete(String id) async => _items.removeWhere((t) => t.id == id);
+}
+
+/// Mimics real offset-based pagination (unlike `_PagedFakeTransactionRepository`
+/// above, which only works for a shrinking list): `list(offset: ...)` returns
+/// up to [pageSize] items starting at `offset`, with nothing ever removed.
+/// Used to prove a read-only caller (CSV export) that pages by advancing
+/// `offset` — rather than relying on deletion to reveal the next page —
+/// collects every transaction, not just the first page.
+class _OffsetPagedFakeTransactionRepository implements TransactionRepository {
+  _OffsetPagedFakeTransactionRepository(List<Transaction> seed, {required this.pageSize}) : _items = List.of(seed);
+  final List<Transaction> _items;
+  final int pageSize;
+
+  @override
+  Future<List<Transaction>> list({int offset = 0}) async =>
+      List.unmodifiable(_items.skip(offset).take(pageSize));
 
   @override
   Future<Transaction> create(Transaction transaction) async {
@@ -488,7 +666,7 @@ class _SlowFakeTransactionRepository implements TransactionRepository {
   }
 
   @override
-  Future<List<Transaction>> list() async => List.unmodifiable(_items);
+  Future<List<Transaction>> list({int offset = 0}) async => List.unmodifiable(_items);
 
   @override
   Future<Transaction> create(Transaction transaction) async {
@@ -509,12 +687,47 @@ class _SlowFakeTransactionRepository implements TransactionRepository {
   }
 }
 
+/// Deletes normally but throws on the [failAt]-th call to `delete()`
+/// (1-indexed) — lets a test drive `_deleteAllData`'s loop partway through
+/// and then verify the UI reflects what's actually left afterward, not a
+/// stale pre-delete snapshot.
+class _FailingAfterNDeletesTransactionRepository implements TransactionRepository {
+  _FailingAfterNDeletesTransactionRepository(List<Transaction> seed, {required this.failAt}) : _items = List.of(seed);
+  final List<Transaction> _items;
+  final int failAt;
+  int _deleteCount = 0;
+
+  @override
+  Future<List<Transaction>> list({int offset = 0}) async => List.unmodifiable(_items.skip(offset));
+
+  @override
+  Future<Transaction> create(Transaction transaction) async {
+    _items.add(transaction);
+    return transaction;
+  }
+
+  @override
+  Future<void> update(Transaction transaction) async {
+    final index = _items.indexWhere((t) => t.id == transaction.id);
+    if (index != -1) _items[index] = transaction;
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    _deleteCount++;
+    if (_deleteCount == failAt) {
+      throw Exception('boom');
+    }
+    _items.removeWhere((t) => t.id == id);
+  }
+}
+
 /// Always fails `create()` with a `23505` (unique-violation) `PostgrestException`
 /// — exercises `RootShell._guardedWrite`'s failure path (friendly message shown,
 /// modal stays open) without needing a real failing backend.
 class _FailingCreateTransactionRepository implements TransactionRepository {
   @override
-  Future<List<Transaction>> list() async => const [];
+  Future<List<Transaction>> list({int offset = 0}) async => const [];
 
   @override
   Future<Transaction> create(Transaction transaction) async =>

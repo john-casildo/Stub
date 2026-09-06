@@ -41,10 +41,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _load();
   }
 
+  /// If `SharedPreferences` throws (a real failure mode — see
+  /// `_ThrowingSharedPreferencesStore` in `test/widget_test.dart`, built for
+  /// the identical bug in `_LockGate`), fall back to the same defaults
+  /// `LocalPrefs`'s own getters use rather than leaving `_themeMode` null
+  /// forever, which would strand this screen on its loading state with no
+  /// way out.
   Future<void> _load() async {
-    final theme = await widget.localPrefs.themeMode();
-    final warnings = await widget.localPrefs.budgetWarningsEnabled();
-    final summary = await widget.localPrefs.weeklySummaryEnabled();
+    ThemeMode theme = ThemeMode.system;
+    bool warnings = true;
+    bool summary = true;
+    try {
+      theme = await widget.localPrefs.themeMode();
+      warnings = await widget.localPrefs.budgetWarningsEnabled();
+      summary = await widget.localPrefs.weeklySummaryEnabled();
+    } catch (_) {
+      // Fall through with the defaults above — still lets the screen render.
+    }
     if (!mounted) return;
     setState(() {
       _themeMode = theme;
@@ -56,7 +69,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setThemeMode(ThemeMode mode) async {
     setState(() => _themeMode = mode);
     widget.themeModeNotifier.value = mode;
-    await widget.localPrefs.setThemeMode(mode);
+    try {
+      await widget.localPrefs.setThemeMode(mode);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save that setting. Please try again.')),
+        );
+      }
+    }
   }
 
   Future<void> _confirmDeleteAllData() async {
@@ -84,19 +105,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final ink50 = ink.withValues(alpha: 0.5);
     final danger = isDark ? StubColors.dangerDark : StubColors.dangerLight;
 
+    final appBar = AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      leading: IconButton(icon: StubIcon(StubIcons.x, size: 18, color: ink), onPressed: widget.onClose),
+      title: Text('Settings', style: StubText.archivo(fontSize: 16, fontWeight: FontWeight.w700, color: ink)),
+      centerTitle: true,
+    );
+
     if (_themeMode == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      // Same app bar as the loaded state below (with its working close
+      // button) so a slow or failed load never stranded the user on a bare
+      // spinner with no way to back out.
+      return Scaffold(
+        backgroundColor: isDark ? StubColors.bgDark : StubColors.bgLight,
+        appBar: appBar,
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
 
     return Scaffold(
       backgroundColor: isDark ? StubColors.bgDark : StubColors.bgLight,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(icon: StubIcon(StubIcons.x, size: 18, color: ink), onPressed: widget.onClose),
-        title: Text('Settings', style: StubText.archivo(fontSize: 16, fontWeight: FontWeight.w700, color: ink)),
-        centerTitle: true,
-      ),
+      appBar: appBar,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -127,8 +157,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: _budgetWarnings ?? true,
                 activeThumbColor: (isDark ? StubColors.goodDark : StubColors.goodLight),
                 onChanged: (value) async {
+                  final messenger = ScaffoldMessenger.of(context);
                   setState(() => _budgetWarnings = value);
-                  await widget.localPrefs.setBudgetWarningsEnabled(value);
+                  try {
+                    await widget.localPrefs.setBudgetWarningsEnabled(value);
+                  } catch (_) {
+                    if (mounted) {
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('Could not save that setting. Please try again.')),
+                      );
+                    }
+                  }
                 },
               ),
               SwitchListTile.adaptive(
@@ -137,8 +176,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: _weeklySummary ?? true,
                 activeThumbColor: (isDark ? StubColors.goodDark : StubColors.goodLight),
                 onChanged: (value) async {
+                  final messenger = ScaffoldMessenger.of(context);
                   setState(() => _weeklySummary = value);
-                  await widget.localPrefs.setWeeklySummaryEnabled(value);
+                  try {
+                    await widget.localPrefs.setWeeklySummaryEnabled(value);
+                  } catch (_) {
+                    if (mounted) {
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('Could not save that setting. Please try again.')),
+                      );
+                    }
+                  }
                 },
               ),
               const SizedBox(height: 24),

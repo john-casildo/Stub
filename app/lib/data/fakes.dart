@@ -43,7 +43,7 @@ class FakeTransactionRepository implements TransactionRepository {
       );
 
   @override
-  Future<List<Transaction>> list() async => List.unmodifiable(_items);
+  Future<List<Transaction>> list({int offset = 0}) async => List.unmodifiable(_items.skip(offset));
 
   @override
   Future<Transaction> create(Transaction transaction) async {
