@@ -1,6 +1,7 @@
 abstract class AccountLinkService {
   bool get isAnonymous;
   String? get linkedEmail;
+  DateTime? get memberSince;
   Future<void> linkEmail(String email);
 
   /// Emits the new `isAnonymous` value whenever the underlying auth

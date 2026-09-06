@@ -109,10 +109,12 @@ class FakeBudgetRepository implements BudgetRepository {
 }
 
 class FakeAccountLinkService implements AccountLinkService {
-  FakeAccountLinkService({this._isAnonymous = true, this.linkedEmail});
+  FakeAccountLinkService({this._isAnonymous = true, this.linkedEmail, this.memberSince});
   bool _isAnonymous;
   @override
   String? linkedEmail;
+  @override
+  DateTime? memberSince;
 
   final _controller = StreamController<bool>.broadcast();
 

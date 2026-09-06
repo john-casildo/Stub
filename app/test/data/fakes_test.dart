@@ -57,4 +57,13 @@ void main() {
     expect(events, [false]); // isAnonymous became false
     await sub.cancel();
   });
+
+  test('FakeAccountLinkService.memberSince defaults to null and is settable', () async {
+    final service = FakeAccountLinkService();
+    expect(service.memberSince, isNull);
+
+    final now = DateTime.now();
+    final withMemberSince = FakeAccountLinkService(memberSince: now);
+    expect(withMemberSince.memberSince, now);
+  });
 }

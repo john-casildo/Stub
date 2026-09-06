@@ -15,6 +15,13 @@ class SupabaseAccountLinkService implements AccountLinkService {
   }
 
   @override
+  DateTime? get memberSince {
+    final raw = _client.auth.currentUser?.createdAt;
+    if (raw == null) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  @override
   Future<void> linkEmail(String email) async {
     await _client.auth.updateUser(
       UserAttributes(email: email),
