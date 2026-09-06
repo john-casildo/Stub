@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:stub/data/category_repository.dart';
 import 'package:stub/data/fakes.dart';
+import 'package:stub/data/local_prefs.dart';
 import 'package:stub/data/transaction_repository.dart';
 import 'package:stub/models/budget_limit.dart';
 import 'package:stub/models/category.dart';
@@ -11,11 +13,18 @@ import 'package:stub/screens/root_shell.dart';
 import 'package:stub/widgets/stub_bottom_nav.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('RootShell starts on the ledger and switches to budgets on tab tap', (tester) async {
     await tester.pumpWidget(MaterialApp(home: RootShell(
       categoryRepository: FakeCategoryRepository(),
       transactionRepository: FakeTransactionRepository(),
       budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
     )));
     await tester.pumpAndSettle();
     expect(find.text('LEFT TO SPEND'), findsOneWidget);
@@ -25,20 +34,79 @@ void main() {
     expect(find.text('BUDGETED THIS MONTH'), findsOneWidget);
   });
 
-  testWidgets('Profile tab shows Ledger content with the nav bar highlighting Home, not Profile', (tester) async {
+  testWidgets('Profile tab shows the real ProfileScreen, not Ledger content', (tester) async {
     await tester.pumpWidget(MaterialApp(home: RootShell(
       categoryRepository: FakeCategoryRepository(),
       transactionRepository: FakeTransactionRepository(),
       budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
     )));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
 
-    expect(find.text('LEFT TO SPEND'), findsOneWidget);
+    expect(find.text('Anonymous — not backed up'), findsOneWidget);
+    expect(find.text('LEFT TO SPEND'), findsNothing); // no longer falling back to Ledger
     final nav = tester.widget<StubBottomNav>(find.byType(StubBottomNav));
-    expect(nav.activeIndex, 0);
+    expect(nav.activeIndex, 2);
+  });
+
+  testWidgets('Tapping Settings from Profile opens SettingsScreen', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: FakeCategoryRepository(),
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('THEME'), findsOneWidget);
+  });
+
+  testWidgets('Deleting all data from Settings clears transactions and categories', (tester) async {
+    final categories = FakeCategoryRepository();
+    final groceries = await categories.create('Groceries');
+    final transactions = FakeTransactionRepository([
+      FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'Corner Market', amount: 18.42),
+    ]);
+    final budgets = FakeBudgetRepository(null, categories);
+    await budgets.create(categoryId: groceries.id, limitAmount: 300, periodType: BudgetPeriodType.monthly, periodStart: DateTime.now());
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: transactions,
+      budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Delete all data'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete everything'));
+    await tester.pumpAndSettle();
+
+    // Back on Profile (settings popped), and the data is gone.
+    expect(find.text('THEME'), findsNothing);
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    expect(find.text('Corner Market'), findsNothing);
   });
 
   testWidgets('Switching tabs cross-fades cleanly and settles on the new screen only', (tester) async {
@@ -46,6 +114,9 @@ void main() {
       categoryRepository: FakeCategoryRepository(),
       transactionRepository: FakeTransactionRepository(),
       budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
     )));
     await tester.pumpAndSettle();
 
@@ -82,6 +153,9 @@ void main() {
       categoryRepository: categories,
       transactionRepository: transactions,
       budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
     )));
     await tester.pumpAndSettle();
 
@@ -93,6 +167,9 @@ void main() {
       categoryRepository: _FailingCategoryRepository(),
       transactionRepository: FakeTransactionRepository(),
       budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
     )));
 
     // Loading state visible on the very first frame, before the failing future resolves.
@@ -112,6 +189,9 @@ void main() {
       categoryRepository: categories,
       transactionRepository: FakeTransactionRepository(),
       budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
     )));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Budgets'));
@@ -128,6 +208,9 @@ void main() {
       categoryRepository: FakeCategoryRepository(),
       transactionRepository: FakeTransactionRepository(),
       budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
     )));
     await tester.pumpAndSettle();
 
@@ -146,6 +229,9 @@ void main() {
       categoryRepository: categories,
       transactionRepository: _FailingCreateTransactionRepository(),
       budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
     )));
     await tester.pumpAndSettle();
 
@@ -176,6 +262,9 @@ void main() {
       categoryRepository: _RestrictingCategoryRepository(categories, transactions),
       transactionRepository: transactions,
       budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
     )));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Budgets'));

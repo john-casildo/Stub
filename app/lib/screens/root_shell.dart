@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../data/account_link_service.dart';
 import '../data/budget_repository.dart';
 import '../data/category_repository.dart';
+import '../data/local_prefs.dart';
 import '../data/transaction_repository.dart';
 import '../models/budget_limit.dart';
 import '../models/category.dart';
 import '../models/category_spend.dart';
 import '../models/transaction.dart';
 import '../theme/category_colors.dart';
+import '../util/csv_export.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_icon.dart';
 import 'add_category_screen.dart';
@@ -15,7 +18,9 @@ import 'budgets_screen.dart';
 import 'edit_entry_screen.dart';
 import 'ledger_screen.dart';
 import 'manual_entry_screen.dart';
+import 'profile_screen.dart';
 import 'scan_screen.dart';
+import 'settings_screen.dart';
 
 const _navItems = [
   StubNavItem(icon: StubIcons.home, label: 'Home'),
@@ -40,11 +45,17 @@ class RootShell extends StatefulWidget {
     required this.categoryRepository,
     required this.transactionRepository,
     required this.budgetRepository,
+    required this.accountLinkService,
+    required this.themeModeNotifier,
+    required this.localPrefs,
   });
 
   final CategoryRepository categoryRepository;
   final TransactionRepository transactionRepository;
   final BudgetRepository budgetRepository;
+  final AccountLinkService accountLinkService;
+  final ValueNotifier<ThemeMode> themeModeNotifier;
+  final LocalPrefs localPrefs;
 
   @override
   State<RootShell> createState() => _RootShellState();
@@ -230,12 +241,34 @@ class _RootShellState extends State<RootShell> {
             onAddCategory: _openAddCategory,
             onDeleteCategory: _deleteCategory,
           );
+        } else if (_tabIndex == 2) {
+          final totalEverTracked = data.transactions.fold<double>(0, (sum, t) => sum + t.amount);
+          content = ProfileScreen(
+            accountLinkService: widget.accountLinkService,
+            totalEverTracked: totalEverTracked,
+            categoryCount: data.categories.length,
+            activeNavIndex: _tabIndex,
+            navItems: _navItems,
+            onNavTap: (i) => setState(() => _tabIndex = i),
+            onScanTap: _openScan,
+            onOpenSettings: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => SettingsScreen(
+                localPrefs: widget.localPrefs,
+                themeModeNotifier: widget.themeModeNotifier,
+                onClose: () => Navigator.of(context).pop(),
+                onExportData: () => exportTransactionsCsv(data.transactions),
+                onDeleteAllData: () => _guardedWrite(() async {
+                  for (final t in data.transactions) {
+                    await widget.transactionRepository.delete(t.id);
+                  }
+                  for (final c in data.categories) {
+                    await widget.categoryRepository.delete(c.id);
+                  }
+                }, onSuccess: () => Navigator.of(context).pop()),
+              ),
+            )),
+          );
         } else {
-          // Tab 2 (Profile) has no screen in the original mockup set —
-          // falls back to Ledger content until a Profile screen is
-          // designed. The nav bar highlight must agree with what's
-          // actually on screen, so it's forced to Home (0) here rather
-          // than passed through as Profile (2).
           final totalLimit = data.budgets.fold<double>(0, (sum, b) => sum + b.limit);
           final totalSpent = data.budgets.fold<double>(0, (sum, b) => sum + b.spent);
           final leftToSpend = totalLimit - totalSpent;
@@ -263,7 +296,7 @@ class _RootShellState extends State<RootShell> {
             leftToSpendFraction: leftToSpendFraction,
             categories: categorySpends,
             recent: data.transactions,
-            activeNavIndex: _tabIndex == 2 ? 0 : _tabIndex,
+            activeNavIndex: _tabIndex,
             navItems: _navItems,
             onNavTap: (i) => setState(() => _tabIndex = i),
             onScanTap: _openScan,
@@ -272,12 +305,15 @@ class _RootShellState extends State<RootShell> {
           );
         }
 
-        // Keyed by which screen is showing (not the raw tab index) so
-        // Home<->Profile — which render identical Ledger content — never
-        // cross-fades against itself.
+        // Keyed by which screen is showing so each tab cross-fades in cleanly.
+        final screenKey = switch (_tabIndex) {
+          1 => 'budgets',
+          2 => 'profile',
+          _ => 'ledger',
+        };
         return AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
-          child: KeyedSubtree(key: ValueKey(_tabIndex == 1 ? 'budgets' : 'ledger'), child: content),
+          child: KeyedSubtree(key: ValueKey(screenKey), child: content),
         );
       },
     );

@@ -155,6 +155,9 @@ class _LockGateState extends State<_LockGate> {
       categoryRepository: widget.categoryRepository,
       transactionRepository: widget.transactionRepository,
       budgetRepository: widget.budgetRepository,
+      accountLinkService: widget.accountLinkService,
+      themeModeNotifier: widget.themeModeNotifier,
+      localPrefs: widget.localPrefs,
     );
   }
 }
