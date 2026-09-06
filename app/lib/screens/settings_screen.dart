@@ -59,6 +59,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await widget.localPrefs.setThemeMode(mode);
   }
 
+  Future<void> _confirmDeleteAllData() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete all data?'),
+        content: const Text('This will permanently delete every transaction, category, and budget. This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete everything'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) widget.onDeleteAllData();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -129,7 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               StubButton(label: 'Export data', onPressed: widget.onExportData),
               const SizedBox(height: 12),
               OutlinedButton(
-                onPressed: widget.onDeleteAllData,
+                onPressed: _confirmDeleteAllData,
                 style: OutlinedButton.styleFrom(foregroundColor: danger, side: BorderSide(color: danger)),
                 child: const Text('Delete all data'),
               ),
