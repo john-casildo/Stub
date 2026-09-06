@@ -31,8 +31,8 @@ it.
 | `app/lib/data/supabase_category_repository.dart` | `SupabaseCategoryRepository` — real Postgres-backed `CategoryRepository` via `supabase_flutter` |
 | `app/lib/data/supabase_transaction_repository.dart` | `SupabaseTransactionRepository` — real Postgres-backed `TransactionRepository`; joins `categories(name)` on read |
 | `app/lib/data/supabase_budget_repository.dart` | `SupabaseBudgetRepository` — real Postgres-backed `BudgetRepository`; reads from the `budget_progress` view |
-| `app/lib/data/local_prefs.dart` | `LocalPrefs` — thin wrapper around `SharedPreferences` for local, per-device UI prefs (never financial data); currently just the one-time `has_seen_backup_prompt` flag. Concrete class, not an interface — no fake exists for it (see `app/test/widget_test.dart`'s `_ThrowingSharedPreferencesStore` for how a real failure is forced through it in tests instead) |
-| `app/lib/data/account_link_service.dart` | `AccountLinkService` — abstract interface (`isAnonymous`, `linkedEmail`, `linkEmail(email)`, `linkStatusChanges` stream) for linking a persistent identity onto the anonymous session |
+| `app/lib/data/local_prefs.dart` | `LocalPrefs` — thin wrapper around `SharedPreferences` for local, per-device UI prefs (never financial data); the one-time `has_seen_backup_prompt` flag, plus `themeMode`/`setThemeMode` (persisted `ThemeMode`, defaults to `system`) and `budgetWarningsEnabled`/`setBudgetWarningsEnabled` + `weeklySummaryEnabled`/`setWeeklySummaryEnabled` (both default `true`) for the two notification toggles on `SettingsScreen`. Concrete class, not an interface — no fake exists for it (see `app/test/widget_test.dart`'s `_ThrowingSharedPreferencesStore` for how a real failure is forced through it in tests instead) |
+| `app/lib/data/account_link_service.dart` | `AccountLinkService` — abstract interface (`isAnonymous`, `linkedEmail`, `memberSince`, `linkEmail(email)`, `linkStatusChanges` stream) for linking a persistent identity onto the anonymous session; `memberSince` backs `ProfileScreen`'s "Member since" line |
 | `app/lib/data/supabase_account_link_service.dart` | `SupabaseAccountLinkService` — real `AccountLinkService` via `supabase_flutter`'s `auth.updateUser`; `linkEmail` sets `emailRedirectTo: 'com.stubapp.stub://login-callback'` |
 | `app/lib/widgets/stub_button.dart` | `StubButton` — Add/Save variant button, see Component inventory below |
 | `app/lib/widgets/stub_logo.dart` | `StubLogo` — the torn-stub-+-check mark, DESIGN.md §7 |
@@ -50,7 +50,8 @@ it.
 | `app/lib/widgets/stub_provider_row.dart` | `StubProviderRow` — one tappable provider row (icon + label + "Coming soon" tag when disabled); disabled rows are wrapped in `IgnorePointer` (absorbs taps instead of letting them fall through to a sibling) and `Semantics(enabled: false)` |
 | `app/lib/widgets/stub_account_link_panel.dart` | `StubAccountLinkPanel` — the 4-provider linking UI (Email functional via `AccountLinkService.linkEmail`, Apple/Google/Phone visibly disabled), with its own email sub-flow, client-side validation, submit-guard, and friendly error handling; shared between `BackupPromptScreen` and Profile's future Account section — reuse it there, don't re-implement |
 | `app/lib/util/currency.dart` | `formatCurrency` — shared thousands-separator currency formatter (negative-safe), used by every screen/widget that displays money |
-| `app/lib/screens/root_shell.dart` | `RootShell` — top-level navigation shell; loads real data from its three injected repositories (`categoryRepository`/`transactionRepository`/`budgetRepository`) via a `FutureBuilder` (`_load`/`_reload`, with loading and error+retry states), tab-switches LedgerScreen/BudgetsScreen via StubBottomNav (cross-fades between them via `AnimatedSwitcher`), and pushes ScanScreen (still a no-op stub — no repository write)/EditEntryScreen/ManualEntryScreen/AddCategoryScreen via Navigator.push, the latter three each wired to a real repository write followed by `_reload()`; category deletion surfaces the Postgres `ON DELETE RESTRICT` error (code `23503`) as a snackbar instead of crashing |
+| `app/lib/util/csv_export.dart` | `buildTransactionsCsv` (pure, unit-tested — `Date,Merchant,Amount,Category,Source` rows, quote-escaping via `_csvField`) and `exportTransactionsCsv` (writes the CSV to a temp file via `path_provider` and hands it to the OS share sheet via `share_plus`'s `SharePlus.instance.share`; not unit-tested — real I/O, verify manually) |
+| `app/lib/screens/root_shell.dart` | `RootShell` — top-level navigation shell; takes `accountLinkService`, `themeModeNotifier` (`ValueNotifier<ThemeMode>`, read at startup from `LocalPrefs.themeMode()` and written live by `SettingsScreen`), and `localPrefs` in addition to the three repositories; loads real data from its three injected repositories (`categoryRepository`/`transactionRepository`/`budgetRepository`) via a `FutureBuilder` (`_load`/`_reload`, with loading and error+retry states), tab-switches LedgerScreen/BudgetsScreen/**ProfileScreen** via StubBottomNav (cross-fades between them via `AnimatedSwitcher`), and pushes ScanScreen (still a no-op stub — no repository write)/EditEntryScreen/ManualEntryScreen/AddCategoryScreen/**SettingsScreen** via Navigator.push; `_openSettings` wires `SettingsScreen.onExportData` to `_exportData` (try/catch around `exportTransactionsCsv`, snackbar on failure — not a Postgrest call so it bypasses `_guardedWrite`) and `onDeleteAllData` to `_deleteAllData` (a blocking, non-dismissible `CircularProgressIndicator` dialog while it loops `list()`-then-`delete()` on transactions until the list comes back empty — correct past PostgREST's 1000-row `max_rows` cap — then deletes every category, pops the dialog and Settings, and reloads); category deletion (both the Budgets-tab delete button and delete-all-data) surfaces the Postgres `ON DELETE RESTRICT` error (code `23503`) as a snackbar instead of crashing |
 | `app/lib/screens/ledger_screen.dart` | `LedgerScreen` — hero "left to spend" progress ring, per-category spend list (colored via `categoryColor`), and recent transactions, now fed real data by `RootShell`; has a `FloatingActionButton` (`onAddManualEntry`) that opens `ManualEntryScreen`; still no category filtering |
 | `app/lib/screens/scan_screen.dart` | `ScanScreen` — presentational confirm-card screen; no camera/OCR/parsing wired (deferred — see OCR/parsing spike section) |
 | `app/lib/screens/edit_entry_screen.dart` | `EditEntryScreen` — correct/review transaction details (merchant, amount, category); saves/deletes via `TransactionRepository` through `RootShell`; no camera/re-capture feature |
@@ -59,13 +60,16 @@ it.
 | `app/lib/screens/budgets_screen.dart` | `BudgetsScreen` — budget overview dashboard with an overall `StubProgressBar` and per-category `StubProgressBar` rows; each row has a delete `IconButton` (`onDeleteCategory`) and there's an add-category tap (`onAddCategory`) that opens `AddCategoryScreen` |
 | `app/lib/screens/lock_screen.dart` | `LockScreen` — app unlock flow, real entry point before RootShell |
 | `app/lib/screens/backup_prompt_screen.dart` | `BackupPromptScreen` — one-time, skippable post-unlock prompt wrapping `StubAccountLinkPanel`; `main.dart`'s `_LockGate` shows it exactly once (tracked via `LocalPrefs.hasSeenBackupPrompt`/`setHasSeenBackupPrompt`) between unlock and `RootShell` |
+| `app/lib/screens/profile_screen.dart` | `ProfileScreen` — the real Profile tab (Tab 2, replaces the old Ledger-content fallback): anonymous/linked status line + `StubAccountLinkPanel` when anonymous (reused, not re-implemented), "Member since" (from `AccountLinkService.memberSince`), lifetime `Tracked`/`Categories` stats, and a Settings row that calls `onOpenSettings` — doesn't push routes itself, `RootShell` owns navigation like every other screen here |
+| `app/lib/screens/settings_screen.dart` | `SettingsScreen` — theme picker (Light/Dark/System via `StubChip`, writes through `LocalPrefs.setThemeMode` and the live `themeModeNotifier`), two notification toggles (`SwitchListTile.adaptive`, UI-only — see Open items), `Export data` (`StubButton` → `onExportData`), `Delete all data` (confirmation `AlertDialog` first, then `onDeleteAllData`), and a disabled "Delete account — Coming soon" row |
 | `app/test/widget_test.dart` | App-level smoke test — boots locked, unlocks into the real ledger, `pumpAndSettle`s past the post-unlock async data load |
 | `app/test/models_test.dart` | Tests for `Transaction`/`CategorySpend`/`BudgetLimit` |
 | `app/test/data/fakes_test.dart` | Tests for `FakeCategoryRepository`/`FakeTransactionRepository`/`FakeBudgetRepository` create/list/update/delete in-memory behavior |
 | `app/test/theme/category_colors_test.dart` | Tests for `categoryColor`'s deterministic cycling and light/dark divergence |
 | `app/test/widgets/*_test.dart` | One test file per reusable widget (`stub_bottom_nav`, `stub_card`, `stub_chip`, `stub_field_row`, `stub_hero_amount`, `stub_icon`, `stub_period_picker`, `stub_pressable`, `stub_progress_bar`, `stub_progress_ring`, `stub_transaction_tile`) — same basename as the widget under `lib/widgets/` |
-| `app/test/screens/*_test.dart` | One test file per screen (`add_category_screen`, `budgets_screen`, `edit_entry_screen`, `ledger_screen`, `lock_screen`, `manual_entry_screen`, `root_shell`, `scan_screen`) — same basename as the screen under `lib/screens/` |
+| `app/test/screens/*_test.dart` | One test file per screen (`add_category_screen`, `backup_prompt_screen`, `budgets_screen`, `edit_entry_screen`, `ledger_screen`, `lock_screen`, `manual_entry_screen`, `profile_screen`, `root_shell`, `scan_screen`, `settings_screen`) — same basename as the screen under `lib/screens/` |
 | `app/test/util/currency_test.dart` | Tests for `formatCurrency`, including the negative-amount case |
+| `app/test/util/csv_export_test.dart` | Tests for `buildTransactionsCsv`'s field quoting/escaping and row shape (the pure half of `csv_export.dart`; `exportTransactionsCsv`'s real file-write/share-sheet call is not unit-tested) |
 | `app/tool/generate_icon_test.dart` | Renders `StubLogo` to `assets/icon/icon.png` for `flutter_launcher_icons`; re-run if the mark changes |
 | `app/supabase/config.toml` | Supabase CLI project config (linked to `jlygdlftvvgmekjcawgr`); `[auth]` has `enable_anonymous_sign_ins = true`, pushed to and confirmed working against the real remote project |
 | `app/supabase/migrations/20260826222620_real_data_foundation.sql` | The real schema: `categories`/`budgets`/`transactions` tables (all with RLS, `select`/`insert`/`update`/`delete` "own rows only" policies keyed on `auth.uid()`), plus the `budget_progress` view (`security_invoker`) that joins each budget to its category name and sums transactions within the current period (weekly/monthly/yearly computed from `now()`, custom uses `period_start`/`period_end`) |
@@ -124,13 +128,13 @@ Flutter SDK installed at `~/development/flutter`, on PATH via `~/.zshrc`.
 - `lib/screens/` — one file per screen, ported from `mockups.html` one at a
   time
 
-**Status**: theme + all reusable components (`StubButton`, `StubLogo`, `StubIcon`, `StubCard`, `StubChip`, `StubFieldRow`, `StubProgressRing`, `StubProgressBar`, `StubTransactionTile`, `StubBottomNav`/`StubNavItem`, `StubHeroAmount`, `StubPressable`, `StubPeriodPicker`, `StubProviderRow`, `StubAccountLinkPanel`) wired and verified (`flutter analyze` clean, 67 tests passing). All 7 real screens (Ledger, Scan, Edit Entry, Manual Entry, Budgets, Lock, Add Category) ported/added and wired via `RootShell` navigation shell, plus the one-time `BackupPromptScreen`. `main.dart` now gates on `LockScreen`, then the one-time backup prompt, before showing the real app.
+**Status**: theme + all reusable components (`StubButton`, `StubLogo`, `StubIcon`, `StubCard`, `StubChip`, `StubFieldRow`, `StubProgressRing`, `StubProgressBar`, `StubTransactionTile`, `StubBottomNav`/`StubNavItem`, `StubHeroAmount`, `StubPressable`, `StubPeriodPicker`, `StubProviderRow`, `StubAccountLinkPanel`) wired and verified (`flutter analyze` clean, 84 tests passing). All 7 real screens (Ledger, Scan, Edit Entry, Manual Entry, Budgets, Lock, Add Category) ported/added and wired via `RootShell` navigation shell, plus the one-time `BackupPromptScreen` and the Profile & Settings pair (`ProfileScreen`, `SettingsScreen`). `main.dart` now gates on `LockScreen`, then the one-time backup prompt, before showing the real app.
 
-The app now reads and writes **real data** through Supabase, not sample data: `main.dart` calls `Supabase.initialize()` then `_ensureSession()` (silently `signInAnonymously()`s if there's no existing session — anonymous auth is enabled and verified working against the real remote project, see the Supabase section below), then constructs the three real `Supabase*Repository` implementations plus `SupabaseAccountLinkService` and `LocalPrefs`, and threads them down through `StubApp` → `_LockGate` → `RootShell`. `RootShell` loads categories/transactions/budgets on init, reloads after every write, and wires Ledger's manual-entry FAB, Edit Entry's save/delete, and a new Add Category screen (name + limit + period, via `StubPeriodPicker`) all the way through to Postgres. There is no user-facing profile/account screen yet, but linking a persistent identity (Phase 2) is now implemented for Email: `_LockGate` shows `BackupPromptScreen` once per device (tracked via `LocalPrefs`) after first unlock, offering Email (functional, via `AccountLinkService.linkEmail`), Apple/Google/Phone (visibly disabled, "Coming soon"). Camera/OCR capture is still not wired (see `ScanScreen`'s entry above) — `ScanScreen` still uses a hardcoded sample merchant/amount/category rather than a real scan result.
+The app now reads and writes **real data** through Supabase, not sample data: `main.dart` calls `Supabase.initialize()` then `_ensureSession()` (silently `signInAnonymously()`s if there's no existing session — anonymous auth is enabled and verified working against the real remote project, see the Supabase section below), then constructs the three real `Supabase*Repository` implementations plus `SupabaseAccountLinkService` and `LocalPrefs`, and threads them down through `StubApp` → `_LockGate` → `RootShell`. `RootShell` loads categories/transactions/budgets on init, reloads after every write, and wires Ledger's manual-entry FAB, Edit Entry's save/delete, and a new Add Category screen (name + limit + period, via `StubPeriodPicker`) all the way through to Postgres. Tab 2 "Profile" now shows the real `ProfileScreen` (it no longer falls back to Ledger content): anonymous/linked status, `StubAccountLinkPanel` reused for the Email link flow, lifetime stats, and a `Settings` row that opens `SettingsScreen` (live theme switching persisted via `LocalPrefs` + a `ValueNotifier<ThemeMode>` read at startup in `main.dart`, two notification toggles that are UI-only so far, CSV export via `share_plus`, and delete-all-data behind a confirmation dialog, both wired through `RootShell`). Linking a persistent identity (Phase 2) is implemented for Email: `_LockGate` shows `BackupPromptScreen` once per device (tracked via `LocalPrefs`) after first unlock, offering Email (functional, via `AccountLinkService.linkEmail`), Apple/Google/Phone (visibly disabled, "Coming soon"); the same panel and the same Email flow are reachable again later from `ProfileScreen` for anyone who skipped the prompt. Camera/OCR capture is still not wired (see `ScanScreen`'s entry above) — `ScanScreen` still uses a hardcoded sample merchant/amount/category rather than a real scan result.
 
 Real app icon generated and installed for both iOS and Android via `tool/generate_icon_test.dart` (renders `StubLogo`'s exact geometry to `assets/icon/icon.png`) + `flutter_launcher_icons`. iOS build confirmed working end to end (`flutter build ios --debug --no-codesign` succeeds).
 
-**Testing approach**: all 67 tests are pure-Dart widget/unit tests run via `flutter test` against the in-memory fakes in `lib/data/fakes.dart` (or, for models/utils, no backend at all) — there is no integration test suite that hits the real Supabase project. The `Supabase*Repository`/`SupabaseAccountLinkService` implementations (`lib/data/supabase_*.dart`) are exercised only by manual/CLI verification during implementation (recorded in the task reports under `.superpowers/sdd/2026-08-26-real-data-foundation/` and `.superpowers/sdd/2026-08-27-account-linking-phase2/`), not by an automated test run against the live database. One exception: `LocalPrefs` (a concrete class, not an interface) has its unlock-time failure path exercised for real by installing a throwing `SharedPreferencesStorePlatform` in `app/test/widget_test.dart`, rather than by a hand-rolled fake of `LocalPrefs` itself.
+**Testing approach**: all 84 tests are pure-Dart widget/unit tests run via `flutter test` against the in-memory fakes in `lib/data/fakes.dart` (or, for models/utils, no backend at all) — there is no integration test suite that hits the real Supabase project. The `Supabase*Repository`/`SupabaseAccountLinkService` implementations (`lib/data/supabase_*.dart`) are exercised only by manual/CLI verification during implementation (recorded in the task reports under `.superpowers/sdd/2026-08-26-real-data-foundation/`, `.superpowers/sdd/2026-08-27-account-linking-phase2/`, and `.superpowers/sdd/2026-08-27-profile-and-settings/`), not by an automated test run against the live database. `csv_export.dart`'s real half (`exportTransactionsCsv`'s temp-file write + OS share sheet) is likewise unverified by an automated test — only its pure CSV-building logic (`buildTransactionsCsv`) is unit-tested; see Open items. One exception: `LocalPrefs` (a concrete class, not an interface) has its unlock-time failure path exercised for real by installing a throwing `SharedPreferencesStorePlatform` in `app/test/widget_test.dart`, rather than by a hand-rolled fake of `LocalPrefs` itself.
 
 ## Backend/database: Supabase
 
@@ -262,22 +266,45 @@ hot-reload/JIT machinery that never ships to real users. Always measure
 - **Account linking is Email-only so far.** Phase 2 added
   `AccountLinkService`/`SupabaseAccountLinkService`, `StubAccountLinkPanel`,
   and the one-time `BackupPromptScreen` (see the Supabase/auth section
-  above) — but there's still no profile screen (Tab 2 "Profile" in
-  `RootShell` currently just falls back to rendering the Ledger content —
-  see the comment in `root_shell.dart`'s `build()`), and Apple/Google/Phone
-  remain visibly disabled pending external provider accounts. A user who
-  skips the prompt or never completes the Email link still loses their data
-  if the device/app data is lost.
-- **SMTP is not yet configured.** Supabase's built-in email sender is
-  dev-only (rate-limited, may not deliver reliably in production). This is
-  what actually sends the email-link confirmation now that Email linking is
-  implemented. A real SMTP provider needs to be configured
-  (`app/supabase/config.toml`'s `[auth.email.smtp]` block) before this
-  ships to real users.
-- **`AccountLinkService.linkStatusChanges` has no subscriber yet.** The
-  interface exists for Profile's future Account section to react to a
-  completed link without polling, but nothing in the app listens to it
-  today. Not a bug, just not wired up until Profile exists.
+  above); Profile & Settings then gave `ProfileScreen` a second entry point
+  into the same panel for anyone who skipped the prompt. Apple/Google/Phone
+  still remain visibly disabled pending external provider accounts. A user
+  who skips the prompt and never later completes the Email link from
+  Profile still loses their data if the device/app data is lost.
+- **SMTP is still not configured.** `app/supabase/config.toml`'s
+  `[auth.email.smtp]` block is present but entirely commented out, so
+  Supabase's built-in dev-only email sender (rate-limited, not reliable in
+  production) is still what actually sends the email-link confirmation. A
+  real SMTP provider needs to be configured there before this ships to real
+  users.
+- **`AccountLinkService.linkStatusChanges` still has no subscriber.**
+  `ProfileScreen` exists now, but it reacts to a completed link via
+  `StubAccountLinkPanel`'s `onLinked` callback (a plain `setState(() {})`
+  after `linkEmail` succeeds), not by subscribing to this stream — so an
+  external event (e.g. the confirmation link being tapped while Profile is
+  already open) still wouldn't refresh the UI without polling. Not a bug on
+  the happy path already covered, just still unused.
+- **Notification toggles are UI-only.** `SettingsScreen`'s "Budget limit
+  warnings" and "Weekly summary" `SwitchListTile.adaptive` rows persist
+  their state via `LocalPrefs` (and the screen says so directly: "These
+  toggles are not yet wired up — they don't do anything today") but nothing
+  reads those values to actually schedule or suppress a notification — no
+  local-notifications package is wired up yet.
+- **"Delete account" is a disabled row, not a real feature.**
+  `SettingsScreen`'s Account section shows a permanently-disabled "Delete
+  account — Coming soon" row (`StubCard`, no tap handler). Actually deleting
+  a Supabase Auth user requires the `service_role` key server-side (a
+  Supabase Edge Function), which doesn't exist yet — this is distinct from
+  "Delete all data," which is implemented and does work (loops
+  `list`/`delete` on transactions, then categories, via the two client-side
+  repositories).
+- **CSV export has not been verified on a real device.** `csv_export.dart`'s
+  `exportTransactionsCsv` (temp-file write via `path_provider` + OS share
+  sheet via `share_plus`) has no automated test — only `buildTransactionsCsv`,
+  the pure CSV-formatting half, is unit-tested — and per the plan's own
+  Testing approach, no physical device was available during development to
+  manually confirm the share sheet actually appears and produces a usable
+  file end to end.
 - **The actual deep-link confirmation flow has never been tested on a real
   device.** No physical device was available during development; the API
   usage was verified against the installed `gotrue`/`supabase_flutter`
@@ -290,7 +317,7 @@ hot-reload/JIT machinery that never ships to real users. Always measure
   screen — tapping "Add to ledger" there does not currently create a real
   transaction row (`onAddToLedger` just pops the screen). Only Manual Entry
   and Edit Entry actually write to Postgres today.
-- **Testing gap**: all 50 tests are unit/widget tests against in-memory
+- **Testing gap**: all 84 tests are unit/widget tests against in-memory
   fakes (`lib/data/fakes.dart`); the `Supabase*Repository` implementations
   have no automated test coverage against a real or local Supabase instance
   — only manual/CLI verification during implementation. Worth adding
@@ -411,7 +438,9 @@ everywhere that pattern appears.**
 | Currency formatting | `formatCurrency` (`lib/util/currency.dart`) | thousands separators, negative-safe; used everywhere a screen displays a dollar amount |
 | Period picker | `StubPeriodPicker` (`lib/widgets/stub_period_picker.dart`) | weekly/monthly/yearly/custom via `StubChip`s; custom reveals start/end `StubFieldRow`s wired to `showDatePicker`; used by `AddCategoryScreen` |
 | Provider row | `StubProviderRow` (`lib/widgets/stub_provider_row.dart`) | one tappable identity-provider row (icon + label); disabled variant shows a "Coming soon" tag, absorbs taps via `IgnorePointer`, and announces itself via `Semantics(enabled: false)` |
-| Account-link panel | `StubAccountLinkPanel` (`lib/widgets/stub_account_link_panel.dart`) | the shared 4-provider (Email/Apple/Google/Phone) linking UI, with its own email sub-flow, validation, submit-guard, and error handling — used by `BackupPromptScreen` today; **Profile's future Account section should reuse this, not re-implement it** |
+| Account-link panel | `StubAccountLinkPanel` (`lib/widgets/stub_account_link_panel.dart`) | the shared 4-provider (Email/Apple/Google/Phone) linking UI, with its own email sub-flow, validation, submit-guard, and error handling — used by both `BackupPromptScreen` and `ProfileScreen` (when anonymous), not re-implemented in either |
+| Profile screen | `ProfileScreen` (`lib/screens/profile_screen.dart`) | Tab 2's real content — status/`StubAccountLinkPanel`/stats cards + a Settings row, built entirely from `StubCard`/`StubIcon`/`StubPressable` rather than introducing new primitives |
+| Settings screen | `SettingsScreen` (`lib/screens/settings_screen.dart`) | theme picker (`StubChip`), notification toggles (`SwitchListTile.adaptive` — this project's first toggle-style control; no `Stub*` wrapper was built for it since Flutter's own adaptive switch already matches platform conventions), export/delete-all-data (`StubButton` + a plain `OutlinedButton` for the destructive action), disabled delete-account row (`StubCard`) |
 
 Before adding a new row to this table, check the list above — the answer is
 often "reuse an existing one" rather than "add a new one."
