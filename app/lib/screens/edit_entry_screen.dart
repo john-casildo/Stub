@@ -116,7 +116,21 @@ class _EditEntryScreenState extends State<EditEntryScreen> {
               StubButton(
                 label: 'Save changes',
                 variant: StubButtonVariant.save,
-                onPressed: () => widget.onSave(_merchant, _amount, _selected),
+                onPressed: () {
+                  if (_merchant.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Enter a merchant name before saving.')),
+                    );
+                    return;
+                  }
+                  if (_amount <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Enter an amount greater than \$0 before saving.')),
+                    );
+                    return;
+                  }
+                  widget.onSave(_merchant, _amount, _selected);
+                },
               ),
               if (!widget.isCreating) ...[
                 const SizedBox(height: 12),

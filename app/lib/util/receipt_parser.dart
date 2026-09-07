@@ -96,8 +96,14 @@ ParsedReceipt parseReceiptLines(List<RecognizedLine> lines) {
     final value = double.tryParse(match.group(1)!.replaceAll(',', ''));
     if (value == null) continue;
     if (largestAmount == null || value > largestAmount) largestAmount = value;
-    if (totalLineAmount == null && _totalKeywordPattern.hasMatch(text)) {
-      totalLineAmount = value;
+    if (_totalKeywordPattern.hasMatch(text)) {
+      // A grand total is always >= any subtotal/tax line by construction,
+      // so taking the largest among total-keyword matches (rather than the
+      // first) avoids "Subtotal" — which contains the substring "total" —
+      // winning over the real "Total" line.
+      if (totalLineAmount == null || value > totalLineAmount) {
+        totalLineAmount = value;
+      }
     }
   }
 

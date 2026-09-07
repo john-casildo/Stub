@@ -62,14 +62,14 @@ void main() {
     expect(find.text('New Merchant'), findsOneWidget);
   });
 
-  testWidgets('isCreating hides the Delete button and onSave still fires', (tester) async {
+  testWidgets('isCreating hides the Delete button and onSave still fires once valid', (tester) async {
     var saved = false;
     await tester.pumpWidget(
       MaterialApp(
         home: EditEntryScreen(
           isCreating: true,
-          merchant: '',
-          amount: 0,
+          merchant: 'Corner Market',
+          amount: 18.42,
           categories: const ['Groceries'],
           selectedCategory: 'Groceries',
           sourceLabel: 'Receipt scan · Today',
@@ -83,5 +83,55 @@ void main() {
     expect(find.text('Delete entry'), findsNothing);
     await tester.tap(find.text('Save changes'));
     expect(saved, isTrue);
+  });
+
+  testWidgets('blocks save and shows a snackbar when merchant is empty', (tester) async {
+    var saved = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditEntryScreen(
+          isCreating: true,
+          merchant: '',
+          amount: 18.42,
+          categories: const ['Groceries'],
+          selectedCategory: 'Groceries',
+          sourceLabel: 'Receipt scan · Today',
+          onClose: () {},
+          onSave: (_, _, _) => saved = true,
+          onDelete: () {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Save changes'));
+    await tester.pump();
+
+    expect(saved, isFalse);
+    expect(find.text('Enter a merchant name before saving.'), findsOneWidget);
+  });
+
+  testWidgets('blocks save and shows a snackbar when amount is zero', (tester) async {
+    var saved = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditEntryScreen(
+          isCreating: true,
+          merchant: 'Corner Market',
+          amount: 0,
+          categories: const ['Groceries'],
+          selectedCategory: 'Groceries',
+          sourceLabel: 'Receipt scan · Today',
+          onClose: () {},
+          onSave: (_, _, _) => saved = true,
+          onDelete: () {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Save changes'));
+    await tester.pump();
+
+    expect(saved, isFalse);
+    expect(find.text('Enter an amount greater than \$0 before saving.'), findsOneWidget);
   });
 }

@@ -37,6 +37,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Stub uses the camera to scan receipts on your device — images are never uploaded.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Stub lets you pick an existing screenshot or photo to scan — images are never uploaded.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

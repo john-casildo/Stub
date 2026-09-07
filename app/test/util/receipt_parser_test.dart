@@ -58,6 +58,16 @@ void main() {
       expect(result.amount, 10.00);
     });
 
+    test('prefers "Total" over "Subtotal" even though "Subtotal" contains "total"', () {
+      final lines = [
+        _line('Subtotal \$40.00', top: 0),
+        _line('Tax \$3.20', top: 20),
+        _line('Total \$43.20', top: 40),
+      ];
+      final result = parseReceiptLines(lines);
+      expect(result.amount, 43.20);
+    });
+
     test('falls back to the largest amount when no total-keyword line exists', () {
       final lines = [
         _line('Item A \$5.00', top: 0),
