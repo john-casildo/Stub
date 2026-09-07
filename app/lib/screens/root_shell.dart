@@ -99,8 +99,19 @@ class _RootShellState extends State<RootShell> {
     ));
   }
 
+  /// `ScanScreen` can fire `onScanned` after it's already popped itself
+  /// (e.g. the user tapped the X close button while OCR was still running
+  /// — `_continue`'s `await` has no guard against that). Without the
+  /// `canPop()` check here, a mistimed cancel would make this method pop
+  /// twice: once for the already-gone `ScanScreen` route, and a second
+  /// time popping `RootShell` itself (the `home` route, which
+  /// `Navigator.pop()` has no last-route protection against), leaving a
+  /// broken/empty stack that `EditEntryScreen` then gets pushed onto.
   void _handleScanned(ParsedReceipt parsed, TransactionSource source) {
-    Navigator.of(context).pop(); // close ScanScreen
+    if (!mounted) return;
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(); // close ScanScreen
+    }
     _dataFuture.then((data) {
       if (mounted) _openScanCreateFlow(parsed, source, data.categories);
     });

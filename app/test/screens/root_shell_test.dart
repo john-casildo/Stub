@@ -9,12 +9,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:stub/data/category_repository.dart';
 import 'package:stub/data/fakes.dart';
 import 'package:stub/data/local_prefs.dart';
-import 'package:stub/data/text_recognition_service.dart';
 import 'package:stub/data/transaction_repository.dart';
 import 'package:stub/models/budget_limit.dart';
 import 'package:stub/models/category.dart';
 import 'package:stub/models/transaction.dart';
+import 'package:stub/screens/edit_entry_screen.dart';
 import 'package:stub/screens/root_shell.dart';
+import 'package:stub/screens/scan_screen.dart';
+import 'package:stub/util/receipt_parser.dart';
 import 'package:stub/widgets/stub_bottom_nav.dart';
 
 const _pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
@@ -569,40 +571,7 @@ void main() {
     expect(find.text('Groceries'), findsOneWidget); // still there — delete was blocked
   });
 
-  testWidgets('Scanning a receipt opens EditEntryScreen pre-filled with the parsed result, and saving creates a transaction', (tester) async {
-    final categories = FakeCategoryRepository();
-    final groceries = await categories.create('Groceries');
-    final transactions = FakeTransactionRepository();
-    final budgets = FakeBudgetRepository(null, categories);
-    await budgets.create(categoryId: groceries.id, limitAmount: 300, periodType: BudgetPeriodType.monthly, periodStart: DateTime.now());
-
-    final ocrLines = [
-      RecognizedLine(text: 'Corner Market', boundingBox: Rect.fromLTWH(0, 0, 100, 20)),
-      RecognizedLine(text: 'Total \$18.42', boundingBox: Rect.fromLTWH(0, 20, 100, 20)),
-    ];
-
-    await tester.pumpWidget(MaterialApp(home: RootShell(
-      categoryRepository: categories,
-      transactionRepository: transactions,
-      budgetRepository: budgets,
-      accountLinkService: FakeAccountLinkService(),
-      themeModeNotifier: ValueNotifier(ThemeMode.system),
-      localPrefs: LocalPrefs(),
-      textRecognitionService: FakeTextRecognitionService(result: ocrLines),
-    )));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('stub-bottom-nav-scan-button')));
-    await tester.pumpAndSettle();
-
-    // Drive ScanScreen's test seam directly isn't possible from here since
-    // RootShell constructs it internally — so this test instead confirms
-    // ScanScreen opened, then exercises the create-flow's EditEntryScreen
-    // wiring directly via RootShell's own scanned-result callback path.
-    expect(find.text('Scan a receipt'), findsOneWidget);
-  });
-
-  testWidgets('_openScan wires a scanned result into a real EditEntryScreen create flow', (tester) async {
+  testWidgets('Scanning a receipt opens EditEntryScreen pre-filled with the parsed result, and saving creates a transaction with the scanned source', (tester) async {
     final categories = FakeCategoryRepository();
     final groceries = await categories.create('Groceries');
     final transactions = FakeTransactionRepository();
@@ -622,8 +591,111 @@ void main() {
 
     await tester.tap(find.byKey(const Key('stub-bottom-nav-scan-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Take photo'));
+    expect(find.byType(ScanScreen), findsOneWidget);
+
+    // `ScanScreen.onScanned` is a public constructor field — drive it
+    // directly instead of routing through `image_picker`/ML Kit (neither
+    // can be driven from a widget test), so the real `_handleScanned` /
+    // `_openScanCreateFlow` wiring in RootShell gets exercised for real.
+    tester.widget<ScanScreen>(find.byType(ScanScreen)).onScanned(
+          const ParsedReceipt(merchant: 'Corner Market', amount: 18.42),
+          TransactionSource.paymentApp,
+        );
     await tester.pumpAndSettle();
+
+    // ScanScreen closed, EditEntryScreen pushed and pre-filled.
+    expect(find.byType(ScanScreen), findsNothing);
+    expect(find.byType(EditEntryScreen), findsOneWidget);
+    expect(find.text('Corner Market'), findsOneWidget);
+    expect(find.text(r'$18.42'), findsOneWidget);
+
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+
+    // EditEntryScreen popped back to the ledger, and a real transaction
+    // was written with the scanned source (not hardcoded to `.receipt`),
+    // the resolved category id, and an `occurredAt` fallback to "now"
+    // since `parsed.occurredAt` was null.
+    expect(find.byType(EditEntryScreen), findsNothing);
+    final saved = (await transactions.list()).single;
+    expect(saved.merchant, 'Corner Market');
+    expect(saved.amount, 18.42);
+    expect(saved.categoryId, groceries.id);
+    expect(saved.source, TransactionSource.paymentApp);
+    expect(DateTime.now().difference(saved.occurredAt).inMinutes, lessThan(1));
+  });
+
+  testWidgets('Scanning a receipt with zero categories shows a snackbar and does not push EditEntryScreen', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: FakeCategoryRepository(),
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
+      textRecognitionService: FakeTextRecognitionService(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('stub-bottom-nav-scan-button')));
+    await tester.pumpAndSettle();
+
+    tester.widget<ScanScreen>(find.byType(ScanScreen)).onScanned(
+          const ParsedReceipt(merchant: 'Corner Market', amount: 18.42),
+          TransactionSource.receipt,
+        );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add a category first, then log an expense.'), findsOneWidget);
+    expect(find.byType(EditEntryScreen), findsNothing);
+  });
+
+  testWidgets('A scanned result arriving after ScanScreen was already closed does not pop RootShell', (tester) async {
+    final categories = FakeCategoryRepository();
+    await categories.create('Groceries');
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      localPrefs: LocalPrefs(),
+      textRecognitionService: FakeTextRecognitionService(),
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('stub-bottom-nav-scan-button')));
+    await tester.pumpAndSettle();
+
+    // Capture the still-live ScanScreen widget's onScanned callback before
+    // closing it — mirrors OCR completing after the user already tapped
+    // the X close button (ScanScreen's own `_continue` has no guard
+    // against firing `onScanned` post-close, see root_shell.dart's
+    // `_handleScanned` doc comment).
+    final onScanned = tester.widget<ScanScreen>(find.byType(ScanScreen)).onScanned;
+
+    await tester.tap(find.byType(IconButton).first); // ScanScreen's X close button
+    await tester.pumpAndSettle();
+    expect(find.byType(ScanScreen), findsNothing);
+    expect(find.text('LEFT TO SPEND'), findsOneWidget); // back on the ledger, RootShell intact
+
+    // The stale onScanned callback fires anyway.
+    onScanned(const ParsedReceipt(merchant: 'Late Result', amount: 5), TransactionSource.receipt);
+    await tester.pumpAndSettle();
+
+    // It still opens EditEntryScreen on top of a sane stack (RootShell
+    // itself was not popped) — the old bug would have popped RootShell
+    // here (since ScanScreen's route was already gone from the stack)
+    // and pushed EditEntryScreen onto a broken/empty stack instead.
+    expect(find.byType(EditEntryScreen), findsOneWidget);
+    expect(find.text('Late Result'), findsOneWidget);
+
+    // Closing it lands back on an intact ledger, not a blank/crashed app.
+    await tester.tap(find.byType(IconButton).first); // EditEntryScreen's X close button
+    await tester.pumpAndSettle();
+    expect(find.text('LEFT TO SPEND'), findsOneWidget);
+    expect(find.byKey(const Key('stub-bottom-nav-scan-button')), findsOneWidget);
   });
 }
 
