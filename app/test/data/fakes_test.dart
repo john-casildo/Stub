@@ -1,5 +1,8 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stub/data/fakes.dart';
+import 'package:stub/data/text_recognition_service.dart';
 import 'package:stub/models/budget_limit.dart';
 
 void main() {
@@ -65,5 +68,14 @@ void main() {
     final now = DateTime.now();
     final withMemberSince = FakeAccountLinkService(memberSince: now);
     expect(withMemberSince.memberSince, now);
+  });
+
+  test('FakeTextRecognitionService.recognizeText returns the configured result', () async {
+    final service = FakeTextRecognitionService();
+    expect(await service.recognizeText('any/path.jpg'), isEmpty);
+
+    const lines = [RecognizedLine(text: 'Corner Market', boundingBox: Rect.zero)];
+    final withResult = FakeTextRecognitionService(result: lines);
+    expect(await withResult.recognizeText('any/path.jpg'), lines);
   });
 }

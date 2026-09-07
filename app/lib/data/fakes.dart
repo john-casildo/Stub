@@ -3,6 +3,7 @@ import 'dart:math';
 import 'account_link_service.dart';
 import 'budget_repository.dart';
 import 'category_repository.dart';
+import 'text_recognition_service.dart';
 import 'transaction_repository.dart';
 import '../models/budget_limit.dart';
 import '../models/category.dart';
@@ -128,4 +129,12 @@ class FakeAccountLinkService implements AccountLinkService {
 
   @override
   Stream<bool> get linkStatusChanges => _controller.stream;
+}
+
+class FakeTextRecognitionService implements TextRecognitionService {
+  FakeTextRecognitionService({this.result = const []});
+  List<RecognizedLine> result;
+
+  @override
+  Future<List<RecognizedLine>> recognizeText(String imagePath) async => result;
 }
