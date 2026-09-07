@@ -10,8 +10,11 @@ import '../models/category.dart';
 import '../models/category_spend.dart';
 import '../models/transaction.dart';
 import '../theme/category_colors.dart';
+import '../theme/colors.dart';
+import '../theme/text.dart';
 import '../util/csv_export.dart';
 import '../widgets/stub_bottom_nav.dart';
+import '../widgets/stub_button.dart';
 import '../widgets/stub_icon.dart';
 import 'add_category_screen.dart';
 import 'budgets_screen.dart';
@@ -306,17 +309,28 @@ class _RootShellState extends State<RootShell> {
     return FutureBuilder<_ShellData>(
       future: _dataFuture,
       builder: (context, snapshot) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final bg = isDark ? StubColors.bgDark : StubColors.bgLight;
+        final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
+
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return Scaffold(
+            backgroundColor: bg,
+            body: const Center(child: CircularProgressIndicator()),
+          );
         }
         if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Something went wrong loading your data.'),
-                TextButton(onPressed: _reload, child: const Text('Retry')),
-              ],
+          return Scaffold(
+            backgroundColor: bg,
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Something went wrong loading your data.', style: StubText.archivo(fontSize: 14, color: ink)),
+                  const SizedBox(height: 16),
+                  StubButton(label: 'Retry', onPressed: _reload),
+                ],
+              ),
             ),
           );
         }
