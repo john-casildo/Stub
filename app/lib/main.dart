@@ -5,10 +5,12 @@ import 'data/account_link_service.dart';
 import 'data/budget_repository.dart';
 import 'data/category_repository.dart';
 import 'data/local_prefs.dart';
+import 'data/mlkit_text_recognition_service.dart';
 import 'data/supabase_account_link_service.dart';
 import 'data/supabase_budget_repository.dart';
 import 'data/supabase_category_repository.dart';
 import 'data/supabase_transaction_repository.dart';
+import 'data/text_recognition_service.dart';
 import 'data/transaction_repository.dart';
 import 'screens/backup_prompt_screen.dart';
 import 'screens/lock_screen.dart';
@@ -93,6 +95,7 @@ class _StartupGateState extends State<_StartupGate> {
           accountLinkService: SupabaseAccountLinkService(Supabase.instance.client),
           localPrefs: result.localPrefs,
           themeModeNotifier: result.themeModeNotifier,
+          textRecognitionService: MlKitTextRecognitionService(),
         );
       },
     );
@@ -164,6 +167,7 @@ class StubApp extends StatelessWidget {
     required this.accountLinkService,
     required this.localPrefs,
     required this.themeModeNotifier,
+    required this.textRecognitionService,
   });
 
   final CategoryRepository categoryRepository;
@@ -172,6 +176,7 @@ class StubApp extends StatelessWidget {
   final AccountLinkService accountLinkService;
   final LocalPrefs localPrefs;
   final ValueNotifier<ThemeMode> themeModeNotifier;
+  final TextRecognitionService textRecognitionService;
 
   @override
   Widget build(BuildContext context) {
@@ -190,6 +195,7 @@ class StubApp extends StatelessWidget {
           accountLinkService: accountLinkService,
           localPrefs: localPrefs,
           themeModeNotifier: themeModeNotifier,
+          textRecognitionService: textRecognitionService,
         ),
       ),
     );
@@ -209,6 +215,7 @@ class _LockGate extends StatefulWidget {
     required this.accountLinkService,
     required this.localPrefs,
     required this.themeModeNotifier,
+    required this.textRecognitionService,
   });
 
   final CategoryRepository categoryRepository;
@@ -217,6 +224,7 @@ class _LockGate extends StatefulWidget {
   final AccountLinkService accountLinkService;
   final LocalPrefs localPrefs;
   final ValueNotifier<ThemeMode> themeModeNotifier;
+  final TextRecognitionService textRecognitionService;
 
   @override
   State<_LockGate> createState() => _LockGateState();
@@ -272,6 +280,7 @@ class _LockGateState extends State<_LockGate> {
       accountLinkService: widget.accountLinkService,
       themeModeNotifier: widget.themeModeNotifier,
       localPrefs: widget.localPrefs,
+      textRecognitionService: widget.textRecognitionService,
     );
   }
 }

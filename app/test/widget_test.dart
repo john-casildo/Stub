@@ -41,6 +41,7 @@ void main() {
       accountLinkService: FakeAccountLinkService(),
       localPrefs: LocalPrefs(),
       themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      textRecognitionService: FakeTextRecognitionService(),
     ));
 
     expect(find.text('Stub is locked'), findsOneWidget);
@@ -59,6 +60,7 @@ void main() {
       accountLinkService: FakeAccountLinkService(),
       localPrefs: LocalPrefs(),
       themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      textRecognitionService: FakeTextRecognitionService(),
     ));
 
     await tester.tap(find.text('Unlock with Face ID'));
@@ -88,6 +90,7 @@ void main() {
         accountLinkService: FakeAccountLinkService(),
         localPrefs: LocalPrefs(),
         themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+        textRecognitionService: FakeTextRecognitionService(),
       ));
 
       await tester.tap(find.text('Unlock with Face ID'));
@@ -111,6 +114,7 @@ void main() {
       accountLinkService: FakeAccountLinkService(),
       localPrefs: LocalPrefs(),
       themeModeNotifier: notifier,
+      textRecognitionService: FakeTextRecognitionService(),
     ));
 
     expect(

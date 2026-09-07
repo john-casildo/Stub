@@ -4,7 +4,7 @@ import '../data/account_link_service.dart';
 import '../data/budget_repository.dart';
 import '../data/category_repository.dart';
 import '../data/local_prefs.dart';
-import '../data/mlkit_text_recognition_service.dart';
+import '../data/text_recognition_service.dart';
 import '../data/transaction_repository.dart';
 import '../models/budget_limit.dart';
 import '../models/category.dart';
@@ -14,6 +14,7 @@ import '../theme/category_colors.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../util/csv_export.dart';
+import '../util/receipt_parser.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_icon.dart';
@@ -52,6 +53,7 @@ class RootShell extends StatefulWidget {
     required this.accountLinkService,
     required this.themeModeNotifier,
     required this.localPrefs,
+    required this.textRecognitionService,
   });
 
   final CategoryRepository categoryRepository;
@@ -60,6 +62,7 @@ class RootShell extends StatefulWidget {
   final AccountLinkService accountLinkService;
   final ValueNotifier<ThemeMode> themeModeNotifier;
   final LocalPrefs localPrefs;
+  final TextRecognitionService textRecognitionService;
 
   @override
   State<RootShell> createState() => _RootShellState();
@@ -87,15 +90,55 @@ class _RootShellState extends State<RootShell> {
       });
 
   void _openScan() {
-    // TODO(Task 6): wire onScanned to push EditEntryScreen with the real
-    // parsed merchant/amount/date so a scan actually reaches the ledger.
-    // For now this only exercises capture + OCR + parsing and pops back,
-    // matching the previous stub's "just pops" behavior.
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ScanScreen(
-        textRecognitionService: MlKitTextRecognitionService(),
+        textRecognitionService: widget.textRecognitionService,
         onClose: () => Navigator.of(context).pop(),
-        onScanned: (_, _) => Navigator.of(context).pop(),
+        onScanned: (parsed, source) => _handleScanned(parsed, source),
+      ),
+    ));
+  }
+
+  void _handleScanned(ParsedReceipt parsed, TransactionSource source) {
+    Navigator.of(context).pop(); // close ScanScreen
+    _dataFuture.then((data) {
+      if (mounted) _openScanCreateFlow(parsed, source, data.categories);
+    });
+  }
+
+  void _openScanCreateFlow(ParsedReceipt parsed, TransactionSource source, List<Category> categories) {
+    if (categories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add a category first, then log an expense.')),
+      );
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => EditEntryScreen(
+        isCreating: true,
+        merchant: parsed.merchant ?? '',
+        amount: parsed.amount ?? 0,
+        categories: [for (final c in categories) c.name],
+        selectedCategory: categories.first.name,
+        sourceLabel: switch (source) {
+          TransactionSource.receipt => 'Receipt scan',
+          TransactionSource.paymentApp => 'Payment app scan',
+          TransactionSource.bankScreenshot => 'Bank screenshot scan',
+          TransactionSource.manual => 'Manual',
+        },
+        onClose: () => Navigator.of(context).pop(),
+        onSave: (merchant, amount, categoryName) => _guardedWrite(() async {
+          final category = categories.firstWhere((c) => c.name == categoryName);
+          await widget.transactionRepository.create(Transaction(
+            id: '',
+            categoryId: category.id,
+            merchant: merchant,
+            amount: amount,
+            category: categoryName,
+            source: source,
+            occurredAt: parsed.occurredAt ?? DateTime.now(),
+          ));
+        }, onSuccess: () => Navigator.of(context).pop()),
       ),
     ));
   }
