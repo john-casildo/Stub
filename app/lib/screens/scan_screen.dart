@@ -1,105 +1,192 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import '../data/text_recognition_service.dart';
+import '../models/transaction.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
-import '../util/currency.dart';
+import '../util/receipt_parser.dart';
 import '../widgets/stub_button.dart';
-import '../widgets/stub_card.dart';
+import '../widgets/stub_chip.dart';
 import '../widgets/stub_icon.dart';
 
-class ScanScreen extends StatelessWidget {
+enum _ScanStage { choosingSource, choosingType, processing }
+
+class ScanScreen extends StatefulWidget {
   const ScanScreen({
     super.key,
-    required this.merchant,
-    required this.amount,
-    required this.category,
+    required this.textRecognitionService,
     required this.onClose,
-    required this.onAddToLedger,
+    required this.onScanned,
+    this.debugInitialImagePath,
   });
 
-  final String merchant;
-  final double amount;
-  final String category;
+  final TextRecognitionService textRecognitionService;
   final VoidCallback onClose;
-  final VoidCallback onAddToLedger;
+  final void Function(ParsedReceipt parsed, TransactionSource source) onScanned;
+
+  /// Test-only seam: real image capture goes through `image_picker`,
+  /// which can't return a fake result inside a widget test. Setting this
+  /// skips straight to the type-picker stage with this path, so the
+  /// OCR/parse/onScanned wiring past that point can still be tested for
+  /// real. Never set outside tests.
+  final String? debugInitialImagePath;
+
+  @override
+  State<ScanScreen> createState() => _ScanScreenState();
+}
+
+class _ScanScreenState extends State<ScanScreen> {
+  late _ScanStage _stage =
+      widget.debugInitialImagePath == null ? _ScanStage.choosingSource : _ScanStage.choosingType;
+  late String? _imagePath = widget.debugInitialImagePath;
+  TransactionSource? _selectedSource;
+
+  Future<void> _pickImage(ImageSource imageSource) async {
+    XFile? picked;
+    try {
+      picked = await ImagePicker().pickImage(source: imageSource);
+    } catch (_) {
+      // Covers permission-denied and any other platform-level failure —
+      // there's nothing to recover into, so surface it and back out.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Camera access is needed to scan a receipt — enable it in Settings.')),
+        );
+      }
+      widget.onClose();
+      return;
+    }
+    if (picked == null) {
+      widget.onClose();
+      return;
+    }
+    setState(() {
+      _imagePath = picked!.path;
+      _stage = _ScanStage.choosingType;
+    });
+  }
+
+  Future<void> _continue() async {
+    final imagePath = _imagePath;
+    final source = _selectedSource;
+    if (imagePath == null || source == null) return;
+    setState(() => _stage = _ScanStage.processing);
+    ParsedReceipt parsed;
+    try {
+      final lines = await widget.textRecognitionService.recognizeText(imagePath);
+      parsed = parseReceiptLines(lines);
+    } catch (_) {
+      parsed = const ParsedReceipt();
+    }
+    widget.onScanned(parsed, source);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final isDark = brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
     final ink50 = ink.withValues(alpha: 0.5);
-    final good = isDark ? StubColors.goodDark : StubColors.goodLight;
-    final goodBg = good.withValues(alpha: 0.14);
 
     return Scaffold(
       backgroundColor: isDark ? StubColors.bgDark : StubColors.bgLight,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(icon: StubIcon(StubIcons.x, size: 18, color: ink), onPressed: onClose),
+        leading: IconButton(icon: StubIcon(StubIcons.x, size: 18, color: ink), onPressed: widget.onClose),
       ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  StubCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _row('MERCHANT', merchant, ink, ink50),
-                        _row('AMOUNT', formatCurrency(amount), ink, ink50, mono: true),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(color: goodBg, borderRadius: BorderRadius.circular(100)),
-                          child: Text(category, style: StubText.archivo(fontSize: 12, fontWeight: FontWeight.w600, color: good)),
-                        ),
-                        const SizedBox(height: 16),
-                        StubButton(label: 'Add to ledger', onPressed: onAddToLedger),
-                      ],
-                    ),
-                  ),
-                  // mockups.html `.parsed-card .stamp`: 58px gradient circle
-                  // overhanging the card's top-right corner.
-                  Positioned(
-                    top: -34,
-                    right: 20,
-                    child: Container(
-                      width: 58,
-                      height: 58,
-                      decoration: BoxDecoration(shape: BoxShape.circle, gradient: StubColors.gradPop(brightness)),
-                      child: const Center(child: Icon(Icons.check, color: Colors.white)),
-                    ),
-                  ),
-                ],
+          child: switch (_stage) {
+            _ScanStage.choosingSource => _SourcePicker(
+                ink: ink,
+                onPickCamera: () => _pickImage(ImageSource.camera),
+                onPickGallery: () => _pickImage(ImageSource.gallery),
               ),
-            ],
-          ),
+            _ScanStage.choosingType => _TypePicker(
+                ink: ink,
+                ink50: ink50,
+                selected: _selectedSource,
+                onSelect: (s) => setState(() => _selectedSource = s),
+                onContinue: _continue,
+              ),
+            _ScanStage.processing => const Center(child: CircularProgressIndicator()),
+          },
         ),
       ),
     );
   }
+}
 
-  Widget _row(String label, String value, Color ink, Color ink50, {bool mono = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: StubText.archivo(fontSize: 11, color: ink50)),
-          Text(
-            value,
-            style: mono
-                ? StubText.unbounded(fontSize: 14, color: ink)
-                : StubText.archivo(fontSize: 14, fontWeight: FontWeight.w600, color: ink),
-          ),
-        ],
-      ),
+class _SourcePicker extends StatelessWidget {
+  const _SourcePicker({required this.ink, required this.onPickCamera, required this.onPickGallery});
+  final Color ink;
+  final VoidCallback onPickCamera;
+  final VoidCallback onPickGallery;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text('Scan a receipt', style: StubText.domine(fontSize: 20, color: ink)),
+        const SizedBox(height: 24),
+        StubButton(label: 'Take photo', onPressed: onPickCamera),
+        const SizedBox(height: 12),
+        StubButton(label: 'Choose from library', onPressed: onPickGallery),
+      ],
+    );
+  }
+}
+
+class _TypePicker extends StatelessWidget {
+  const _TypePicker({
+    required this.ink,
+    required this.ink50,
+    required this.selected,
+    required this.onSelect,
+    required this.onContinue,
+  });
+  final Color ink;
+  final Color ink50;
+  final TransactionSource? selected;
+  final ValueChanged<TransactionSource> onSelect;
+  final VoidCallback onContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'What kind of image is this?',
+          style: StubText.archivo(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            StubChip(
+              label: 'Receipt',
+              selected: selected == TransactionSource.receipt,
+              onTap: () => onSelect(TransactionSource.receipt),
+            ),
+            StubChip(
+              label: 'Payment app',
+              selected: selected == TransactionSource.paymentApp,
+              onTap: () => onSelect(TransactionSource.paymentApp),
+            ),
+            StubChip(
+              label: 'Bank screenshot',
+              selected: selected == TransactionSource.bankScreenshot,
+              onTap: () => onSelect(TransactionSource.bankScreenshot),
+            ),
+          ],
+        ),
+        const Spacer(),
+        StubButton(label: 'Continue', onPressed: selected == null ? null : onContinue),
+      ],
     );
   }
 }

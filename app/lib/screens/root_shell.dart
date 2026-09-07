@@ -4,6 +4,7 @@ import '../data/account_link_service.dart';
 import '../data/budget_repository.dart';
 import '../data/category_repository.dart';
 import '../data/local_prefs.dart';
+import '../data/mlkit_text_recognition_service.dart';
 import '../data/transaction_repository.dart';
 import '../models/budget_limit.dart';
 import '../models/category.dart';
@@ -86,13 +87,15 @@ class _RootShellState extends State<RootShell> {
       });
 
   void _openScan() {
+    // TODO(Task 6): wire onScanned to push EditEntryScreen with the real
+    // parsed merchant/amount/date so a scan actually reaches the ledger.
+    // For now this only exercises capture + OCR + parsing and pops back,
+    // matching the previous stub's "just pops" behavior.
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ScanScreen(
-        merchant: 'Corner Market',
-        amount: 18.42,
-        category: 'Groceries',
+        textRecognitionService: MlKitTextRecognitionService(),
         onClose: () => Navigator.of(context).pop(),
-        onAddToLedger: () => Navigator.of(context).pop(),
+        onScanned: (_, _) => Navigator.of(context).pop(),
       ),
     ));
   }
