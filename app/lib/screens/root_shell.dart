@@ -106,10 +106,15 @@ class _RootShellState extends State<RootShell> {
         selectedCategory: transaction.category,
         sourceLabel: transaction.dateLabel,
         onClose: () => Navigator.of(context).pop(),
-        onSave: (selectedCategory) => _guardedWrite(() async {
-          final category = categories.firstWhere((c) => c.name == selectedCategory);
+        onSave: (merchant, amount, category) => _guardedWrite(() async {
+          final selectedCategory = categories.firstWhere((c) => c.name == category);
           await widget.transactionRepository.update(
-            transaction.copyWith(category: selectedCategory, categoryId: category.id),
+            transaction.copyWith(
+              merchant: merchant,
+              amount: amount,
+              category: category,
+              categoryId: selectedCategory.id,
+            ),
           );
         }, onSuccess: () => Navigator.of(context).pop()),
         onDelete: () => _guardedWrite(
