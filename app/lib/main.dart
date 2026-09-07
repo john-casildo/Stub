@@ -14,9 +14,25 @@ import 'screens/backup_prompt_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/root_shell.dart';
 import 'theme/app_theme.dart';
+import 'theme/colors.dart';
+import 'theme/text.dart';
+import 'widgets/stub_button.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  runApp(const _StartupGate());
+}
+
+class _StartupResult {
+  _StartupResult({required this.localPrefs, required this.themeModeNotifier});
+  final LocalPrefs localPrefs;
+  final ValueNotifier<ThemeMode> themeModeNotifier;
+}
+
+/// `Supabase.initialize` is safe to call more than once (it no-ops if
+/// already initialized), so the whole bootstrap sequence can be retried
+/// as one unit on failure.
+Future<_StartupResult> _startup() async {
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.publishableKey,
@@ -24,20 +40,118 @@ Future<void> main() async {
   await _ensureSession();
   final localPrefs = LocalPrefs();
   final themeModeNotifier = ValueNotifier<ThemeMode>(await localPrefs.themeMode());
-  runApp(StubApp(
-    categoryRepository: SupabaseCategoryRepository(Supabase.instance.client),
-    transactionRepository: SupabaseTransactionRepository(Supabase.instance.client),
-    budgetRepository: SupabaseBudgetRepository(Supabase.instance.client),
-    accountLinkService: SupabaseAccountLinkService(Supabase.instance.client),
-    localPrefs: localPrefs,
-    themeModeNotifier: themeModeNotifier,
-  ));
+  return _StartupResult(localPrefs: localPrefs, themeModeNotifier: themeModeNotifier);
 }
 
 Future<void> _ensureSession() async {
   final client = Supabase.instance.client;
   if (client.auth.currentSession == null) {
     await client.auth.signInAnonymously();
+  }
+}
+
+/// Runs the real (network-dependent) startup sequence before the real app
+/// exists to show anything — must never let a failure here (e.g. no
+/// internet reaching Supabase) throw uncaught out of `main()`, which
+/// would prevent `runApp` from ever being called and leave the OS
+/// showing a blank white screen with no way to recover short of
+/// force-quitting. Shows a loading state, then either the real `StubApp`
+/// or a retry screen, same loading/error/retry shape as `RootShell`'s
+/// own data-loading `FutureBuilder`.
+class _StartupGate extends StatefulWidget {
+  const _StartupGate();
+
+  @override
+  State<_StartupGate> createState() => _StartupGateState();
+}
+
+class _StartupGateState extends State<_StartupGate> {
+  late Future<_StartupResult> _future = _startup();
+
+  void _retry() {
+    setState(() {
+      _future = _startup();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_StartupResult>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _StartupScaffold(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return _StartupScaffold(child: _StartupError(onRetry: _retry));
+        }
+        final result = snapshot.data!;
+        return StubApp(
+          categoryRepository: SupabaseCategoryRepository(Supabase.instance.client),
+          transactionRepository: SupabaseTransactionRepository(Supabase.instance.client),
+          budgetRepository: SupabaseBudgetRepository(Supabase.instance.client),
+          accountLinkService: SupabaseAccountLinkService(Supabase.instance.client),
+          localPrefs: result.localPrefs,
+          themeModeNotifier: result.themeModeNotifier,
+        );
+      },
+    );
+  }
+}
+
+/// A minimal themed `MaterialApp` for the loading/error states above —
+/// the real `StubApp`'s `MaterialApp` (with the user's persisted theme
+/// preference) doesn't exist yet at this point, so this uses the system
+/// brightness instead.
+class _StartupScaffold extends StatelessWidget {
+  const _StartupScaffold({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: StubTheme.light(),
+      darkTheme: StubTheme.dark(),
+      themeMode: ThemeMode.system,
+      home: Builder(
+        builder: (context) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return Scaffold(
+            backgroundColor: isDark ? StubColors.bgDark : StubColors.bgLight,
+            body: Center(child: child),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _StartupError extends StatelessWidget {
+  const _StartupError({required this.onRetry});
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text("Couldn't connect", style: StubText.archivo(fontSize: 16, fontWeight: FontWeight.w700, color: ink)),
+          const SizedBox(height: 8),
+          Text(
+            'Check your internet connection and try again.',
+            textAlign: TextAlign.center,
+            style: StubText.archivo(fontSize: 14, color: ink.withValues(alpha: 0.6)),
+          ),
+          const SizedBox(height: 20),
+          StubButton(label: 'Retry', onPressed: onRetry),
+        ],
+      ),
+    );
   }
 }
 
