@@ -59,56 +59,54 @@ class LedgerScreen extends StatelessWidget {
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        bottom: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Stub', style: StubText.domine(fontSize: 18, color: ink)),
+                  Text(monthLabel.toUpperCase(), style: StubText.archivo(fontSize: 12, color: ink50, letterSpacing: 0.6)),
+                ],
+              ),
+              const SizedBox(height: 18),
+              StubCard(
+                child: Row(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Stub', style: StubText.domine(fontSize: 18, color: ink)),
-                        Text(monthLabel.toUpperCase(), style: StubText.archivo(fontSize: 12, color: ink50, letterSpacing: 0.6)),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    StubCard(
-                      child: Row(
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('LEFT TO SPEND', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
-                                const SizedBox(height: 6),
-                                StubHeroAmount(amount: leftToSpend, fontSize: 26),
-                              ],
-                            ),
-                          ),
-                          StubProgressRing(progress: leftToSpendFraction),
+                          Text('LEFT TO SPEND', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
+                          const SizedBox(height: 6),
+                          StubHeroAmount(amount: leftToSpend, fontSize: 26),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    StubCard(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                      child: Column(children: [for (final c in categories) _CategoryRow(category: c)]),
-                    ),
-                    const SizedBox(height: 22),
-                    Text('RECENT', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
-                    const SizedBox(height: 8),
-                    for (final t in recent)
-                      StubTransactionTile(transaction: t, onTap: onTransactionTap == null ? null : () => onTransactionTap!(t)),
+                    StubProgressRing(progress: leftToSpendFraction),
                   ],
                 ),
               ),
-            ),
-            StubBottomNav(items: navItems, activeIndex: activeNavIndex, onTap: onNavTap, onScanTap: onScanTap),
-          ],
+              const SizedBox(height: 16),
+              StubCard(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+                child: Column(children: [for (final c in categories) _CategoryRow(category: c)]),
+              ),
+              const SizedBox(height: 22),
+              Text('RECENT', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
+              const SizedBox(height: 8),
+              for (final t in recent)
+                StubTransactionTile(transaction: t, onTap: onTransactionTap == null ? null : () => onTransactionTap!(t)),
+            ],
+          ),
         ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: StubBottomNav(items: navItems, activeIndex: activeNavIndex, onTap: onNavTap, onScanTap: onScanTap),
       ),
     );
   }

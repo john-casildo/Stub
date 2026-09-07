@@ -61,66 +61,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: isDark ? StubColors.bgDark : StubColors.bgLight,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        bottom: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Profile', style: StubText.domine(fontSize: 18, color: ink)),
+              const SizedBox(height: 18),
+              StubCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Profile', style: StubText.domine(fontSize: 18, color: ink)),
-                    const SizedBox(height: 18),
-                    StubCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            service.isAnonymous ? 'Anonymous — not backed up' : 'Linked via ${service.linkedEmail}',
-                            style: StubText.archivo(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
-                          ),
-                          const SizedBox(height: 4),
-                          Text('Member since ${_memberSinceLabel()}', style: StubText.archivo(fontSize: 12, color: ink50)),
-                          if (service.isAnonymous) ...[
-                            const SizedBox(height: 16),
-                            StubAccountLinkPanel(
-                              accountLinkService: service,
-                              onLinked: () => setState(() {}),
-                            ),
-                          ],
-                        ],
-                      ),
+                    Text(
+                      service.isAnonymous ? 'Anonymous — not backed up' : 'Linked via ${service.linkedEmail}',
+                      style: StubText.archivo(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
                     ),
-                    const SizedBox(height: 18),
-                    StubCard(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _Stat(label: 'Tracked', value: formatCurrency(widget.totalEverTracked)),
-                          _Stat(label: 'Categories', value: '${widget.categoryCount}'),
-                        ],
+                    const SizedBox(height: 4),
+                    Text('Member since ${_memberSinceLabel()}', style: StubText.archivo(fontSize: 12, color: ink50)),
+                    if (service.isAnonymous) ...[
+                      const SizedBox(height: 16),
+                      StubAccountLinkPanel(
+                        accountLinkService: service,
+                        onLinked: () => setState(() {}),
                       ),
-                    ),
-                    const SizedBox(height: 18),
-                    StubPressable(
-                      onTap: widget.onOpenSettings,
-                      child: StubCard(
-                        child: Row(
-                          children: [
-                            StubIcon(StubIcons.pencil, size: 18, color: ink),
-                            const SizedBox(width: 12),
-                            Expanded(child: Text('Settings', style: StubText.archivo(fontSize: 15, fontWeight: FontWeight.w600, color: ink))),
-                          ],
-                        ),
-                      ),
-                    ),
+                    ],
                   ],
                 ),
               ),
-            ),
-            StubBottomNav(items: widget.navItems, activeIndex: widget.activeNavIndex, onTap: widget.onNavTap, onScanTap: widget.onScanTap),
-          ],
+              const SizedBox(height: 18),
+              StubCard(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _Stat(label: 'Tracked', value: formatCurrency(widget.totalEverTracked)),
+                    _Stat(label: 'Categories', value: '${widget.categoryCount}'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              StubPressable(
+                onTap: widget.onOpenSettings,
+                child: StubCard(
+                  child: Row(
+                    children: [
+                      StubIcon(StubIcons.pencil, size: 18, color: ink),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text('Settings', style: StubText.archivo(fontSize: 15, fontWeight: FontWeight.w600, color: ink))),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: StubBottomNav(items: widget.navItems, activeIndex: widget.activeNavIndex, onTap: widget.onNavTap, onScanTap: widget.onScanTap),
       ),
     );
   }

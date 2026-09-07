@@ -46,70 +46,68 @@ class BudgetsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: isDark ? StubColors.bgDark : StubColors.bgLight,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        bottom: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Stub', style: StubText.domine(fontSize: 18, color: ink)),
+                  Text(monthLabel.toUpperCase(), style: StubText.archivo(fontSize: 12, color: ink50, letterSpacing: 0.6)),
+                ],
+              ),
+              const SizedBox(height: 18),
+              StubCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Stub', style: StubText.domine(fontSize: 18, color: ink)),
-                        Text(monthLabel.toUpperCase(), style: StubText.archivo(fontSize: 12, color: ink50, letterSpacing: 0.6)),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    StubCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('BUDGETED THIS MONTH', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
-                          const SizedBox(height: 6),
-                          StubHeroAmount(amount: totalBudgeted, fontSize: 24),
-                          const SizedBox(height: 12),
-                          StubProgressBar(progress: overallFraction),
-                          const SizedBox(height: 8),
-                          Text(
-                            '\$${totalSpent.toStringAsFixed(0)} spent so far · ${(overallFraction * 100).round()}%',
-                            style: StubText.archivo(fontSize: 12, color: ink50),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    Text('CATEGORY LIMITS', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
-                    const SizedBox(height: 10),
-                    StubCard(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-                      child: Column(children: [
-                        for (final b in budgets) _BudgetRow(budget: b, onDelete: () => onDeleteCategory(b.categoryId)),
-                      ]),
-                    ),
-                    const SizedBox(height: 14),
-                    StubPressable(
-                      onTap: onAddCategory,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: ink.withValues(alpha: 0.15)),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Center(
-                          child: Text('+ Add a category', style: StubText.archivo(fontSize: 13, fontWeight: FontWeight.w600, color: ink50)),
-                        ),
-                      ),
+                    Text('BUDGETED THIS MONTH', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
+                    const SizedBox(height: 6),
+                    StubHeroAmount(amount: totalBudgeted, fontSize: 24),
+                    const SizedBox(height: 12),
+                    StubProgressBar(progress: overallFraction),
+                    const SizedBox(height: 8),
+                    Text(
+                      '\$${totalSpent.toStringAsFixed(0)} spent so far · ${(overallFraction * 100).round()}%',
+                      style: StubText.archivo(fontSize: 12, color: ink50),
                     ),
                   ],
                 ),
               ),
-            ),
-            StubBottomNav(items: navItems, activeIndex: activeNavIndex, onTap: onNavTap, onScanTap: onScanTap),
-          ],
+              const SizedBox(height: 22),
+              Text('CATEGORY LIMITS', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
+              const SizedBox(height: 10),
+              StubCard(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                child: Column(children: [
+                  for (final b in budgets) _BudgetRow(budget: b, onDelete: () => onDeleteCategory(b.categoryId)),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              StubPressable(
+                onTap: onAddCategory,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: ink.withValues(alpha: 0.15)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text('+ Add a category', style: StubText.archivo(fontSize: 13, fontWeight: FontWeight.w600, color: ink50)),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: StubBottomNav(items: navItems, activeIndex: activeNavIndex, onTap: onNavTap, onScanTap: onScanTap),
       ),
     );
   }
