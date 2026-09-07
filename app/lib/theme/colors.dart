@@ -23,10 +23,10 @@ class StubColors {
   static const gradSecondLight = Color(0xFF00D9B5);
 
   // ---- dark (same values whether via system dark mode or explicit toggle) ----
-  static const bgDark = Color(0xFF17130F);
-  static const bgWeaveDark = Color(0xFF1E1811);
-  static const surfaceDark = Color(0xFF221B14);
-  static const surfaceAltDark = Color(0xFF2B2318);
+  static const bgDark = Color(0xFF0A0A0A);
+  static const bgWeaveDark = Color(0xFF121212);
+  static const surfaceDark = Color(0xFF1A1A1A);
+  static const surfaceAltDark = Color(0xFF242424);
   static const inkDark = Color(0xFFF3ECDD);
   static const lineDark = Color(0x24F3ECDD); // ink @ ~14%
   static const accentDark = Color(0xFF2E9CFF);

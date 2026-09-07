@@ -73,10 +73,10 @@ dark-mode toggle. Double check all three whenever a color changes.
 
 | Token | Value |
 |---|---|
-| `--bg` | `#17130F` |
-| `--bg-weave` | `#1E1811` |
-| `--surface` | `#221B14` |
-| `--surface-alt` | `#2B2318` |
+| `--bg` | `#0A0A0A` |
+| `--bg-weave` | `#121212` |
+| `--surface` | `#1A1A1A` |
+| `--surface-alt` | `#242424` |
 | `--ink` | `#F3ECDD` |
 | `--line` | `rgba(243,236,221,.14)` |
 | `--accent` | `#2E9CFF` |
@@ -89,7 +89,7 @@ dark-mode toggle. Double check all three whenever a color changes.
 | `--danger` | `#E2776A` |
 | `--warn` | `#D3A85F` |
 | `--shadow` | `rgba(0,0,0,.55)` |
-| `--phone-body` | `#0E0C09` |
+| `--phone-body` | `#050505` |
 | `--grad-pop` | `linear-gradient(135deg, var(--accent) 0%, #34F5D0 100%)` |
 | `--grad-b-color` | `#34F5D0` |
 
