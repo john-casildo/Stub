@@ -26,4 +26,36 @@ void main() {
     expect(savedAmount, 12.50);
     expect(savedCategory, 'Dining');
   });
+
+  testWidgets('Pre-fills the amount and merchant when given initial values', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualEntryScreen(
+          categories: const ['Groceries'],
+          initialAmount: 12.50,
+          initialMerchant: 'Starbucks',
+          onClose: () {},
+          onSave: (amount, merchant, category) {},
+        ),
+      ),
+    );
+
+    expect(find.text('12.50'), findsOneWidget);
+    expect(find.text('Starbucks'), findsOneWidget);
+  });
+
+  testWidgets('Still defaults to 0.00 and "Add a name" when no initial values are given', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualEntryScreen(
+          categories: const ['Groceries'],
+          onClose: () {},
+          onSave: (amount, merchant, category) {},
+        ),
+      ),
+    );
+
+    expect(find.text('0.00'), findsOneWidget);
+    expect(find.text('Add a name'), findsOneWidget);
+  });
 }
