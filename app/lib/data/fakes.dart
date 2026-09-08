@@ -3,6 +3,7 @@ import 'dart:math';
 import 'account_link_service.dart';
 import 'budget_repository.dart';
 import 'category_repository.dart';
+import 'deep_link_service.dart';
 import 'device_auth_service.dart';
 import 'text_recognition_service.dart';
 import 'transaction_repository.dart';
@@ -160,4 +161,19 @@ class FakeTextRecognitionService implements TextRecognitionService {
 
   @override
   Future<List<RecognizedLine>> recognizeText(String imagePath) async => result;
+}
+
+class FakeDeepLinkService implements DeepLinkService {
+  FakeDeepLinkService({this.initialLink});
+  Uri? initialLink;
+  final _controller = StreamController<Uri>.broadcast();
+
+  @override
+  Future<Uri?> getInitialLink() async => initialLink;
+
+  @override
+  Stream<Uri> get onLink => _controller.stream;
+
+  /// Test helper — simulates a link arriving while the app is running.
+  void emit(Uri uri) => _controller.add(uri);
 }
