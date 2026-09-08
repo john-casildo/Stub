@@ -15,6 +15,13 @@ void main() {
     expect(await repo.list(), isEmpty);
   });
 
+  test('FakeCategoryRepository.create carries an optional currency override', () async {
+    final repo = FakeCategoryRepository();
+    final created = await repo.create('Groceries', currencyCode: 'CRC');
+    expect(created.currencyCode, 'CRC');
+    expect((await repo.list()).first.currencyCode, 'CRC');
+  });
+
   test('FakeTransactionRepository creates, lists, updates, and deletes in memory', () async {
     final repo = FakeTransactionRepository();
     final t = await repo.create(FakeTransactionRepository.sample(categoryId: 'c1', merchant: 'Corner Market'));
@@ -61,6 +68,17 @@ void main() {
     await sub.cancel();
   });
 
+  test('FakeAccountLinkService.setName sets firstName and lastName', () async {
+    final service = FakeAccountLinkService();
+    expect(service.firstName, isNull);
+    expect(service.lastName, isNull);
+
+    await service.setName(firstName: 'Ada', lastName: 'Lovelace');
+
+    expect(service.firstName, 'Ada');
+    expect(service.lastName, 'Lovelace');
+  });
+
   test('FakeAccountLinkService.memberSince defaults to null and is settable', () async {
     final service = FakeAccountLinkService();
     expect(service.memberSince, isNull);
@@ -68,6 +86,20 @@ void main() {
     final now = DateTime.now();
     final withMemberSince = FakeAccountLinkService(memberSince: now);
     expect(withMemberSince.memberSince, now);
+  });
+
+  test('FakeDeviceAuthService defaults to supported and succeeding', () async {
+    final service = FakeDeviceAuthService();
+    expect(await service.isSupported(), isTrue);
+    expect(await service.authenticate(), isTrue);
+  });
+
+  test('FakeDeviceAuthService can be configured as unsupported or failing', () async {
+    final unsupported = FakeDeviceAuthService(supported: false);
+    expect(await unsupported.isSupported(), isFalse);
+
+    final failing = FakeDeviceAuthService(succeeds: false);
+    expect(await failing.authenticate(), isFalse);
   });
 
   test('FakeTextRecognitionService.recognizeText returns the configured result', () async {

@@ -8,7 +8,14 @@ void main() {
     final category = Category.fromRow({'id': 'c1', 'name': 'Groceries'});
     expect(category.id, 'c1');
     expect(category.name, 'Groceries');
-    expect(category.toInsertRow('u1'), {'user_id': 'u1', 'name': 'Groceries'});
+    expect(category.currencyCode, isNull);
+    expect(category.toInsertRow('u1'), {'user_id': 'u1', 'name': 'Groceries', 'currency_code': null});
+  });
+
+  test('Category carries an optional currency override', () {
+    final category = Category.fromRow({'id': 'c1', 'name': 'Groceries', 'currency_code': 'CRC'});
+    expect(category.currencyCode, 'CRC');
+    expect(category.toInsertRow('u1')['currency_code'], 'CRC');
   });
 
   test('BudgetPeriodType round-trips through its wire value', () {

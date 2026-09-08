@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 import 'package:stub/data/local_prefs.dart';
 import 'package:stub/screens/settings_screen.dart';
+import 'package:stub/widgets/stub_loading_indicator.dart';
 
 /// A [SharedPreferencesStorePlatform] whose reads/writes always throw, used
 /// to force a real failure through [LocalPrefs] — same pattern as
@@ -33,6 +34,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: SettingsScreen(
       localPrefs: prefs,
       themeModeNotifier: notifier,
+      currencyNotifier: ValueNotifier<String>('USD'),
       onClose: () {},
       onExportData: () {},
       onDeleteAllData: () {},
@@ -53,6 +55,33 @@ void main() {
     expect(find.textContaining('not yet'), findsWidgets); // the inert-notifications disclaimer
   });
 
+  testWidgets('SettingsScreen shows the currency picker and persists changes', (tester) async {
+    final prefs = LocalPrefs();
+    final currencyNotifier = ValueNotifier<String>('USD');
+
+    await tester.pumpWidget(MaterialApp(home: SettingsScreen(
+      localPrefs: prefs,
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      currencyNotifier: currencyNotifier,
+      onClose: () {},
+      onExportData: () {},
+      onDeleteAllData: () {},
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('USD'), findsOneWidget);
+
+    // Not just USD/CRC — the picker offers a broad set of world currencies.
+    await tester.tap(find.text('USD'));
+    await tester.pumpAndSettle();
+    expect(find.text('EUR').last, findsOneWidget);
+    await tester.tap(find.text('EUR').last);
+    await tester.pumpAndSettle();
+
+    expect(currencyNotifier.value, 'EUR');
+    expect(await prefs.currencyCode(), 'EUR');
+  });
+
   testWidgets('Delete all data requires confirmation before calling onDeleteAllData', (tester) async {
     var deleted = false;
     final prefs = LocalPrefs();
@@ -61,12 +90,15 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: SettingsScreen(
       localPrefs: prefs,
       themeModeNotifier: notifier,
+      currencyNotifier: ValueNotifier<String>('USD'),
       onClose: () {},
       onExportData: () {},
       onDeleteAllData: () => deleted = true,
     )));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Delete all data'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete all data'));
     await tester.pumpAndSettle();
 
@@ -92,6 +124,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: SettingsScreen(
       localPrefs: prefs,
       themeModeNotifier: notifier,
+      currencyNotifier: ValueNotifier<String>('USD'),
       onClose: () => closed = true,
       onExportData: () {},
       onDeleteAllData: () {},
@@ -108,7 +141,7 @@ void main() {
 
     // Falls back to defaults and renders the real screen instead of hanging
     // on the loading spinner forever.
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(StubLoadingIndicator), findsNothing);
     expect(find.text('THEME'), findsOneWidget);
     expect(find.text('Light'), findsOneWidget);
 

@@ -11,7 +11,13 @@ class _ThrowingAccountLinkService implements AccountLinkService {
   @override
   DateTime? get memberSince => null;
   @override
+  String? get firstName => null;
+  @override
+  String? get lastName => null;
+  @override
   Future<void> linkEmail(String email) async => throw Exception('network error');
+  @override
+  Future<void> setName({required String firstName, required String lastName}) async {}
   @override
   Stream<bool> get linkStatusChanges => const Stream.empty();
 }

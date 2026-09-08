@@ -3,6 +3,7 @@ import 'dart:math';
 import 'account_link_service.dart';
 import 'budget_repository.dart';
 import 'category_repository.dart';
+import 'device_auth_service.dart';
 import 'text_recognition_service.dart';
 import 'transaction_repository.dart';
 import '../models/budget_limit.dart';
@@ -19,8 +20,8 @@ class FakeCategoryRepository implements CategoryRepository {
   Future<List<Category>> list() async => List.unmodifiable(_items);
 
   @override
-  Future<Category> create(String name) async {
-    final category = Category(id: _fakeId(), name: name);
+  Future<Category> create(String name, {String? currencyCode}) async {
+    final category = Category(id: _fakeId(), name: name, currencyCode: currencyCode);
     _items.add(category);
     return category;
   }
@@ -110,13 +111,17 @@ class FakeBudgetRepository implements BudgetRepository {
 }
 
 class FakeAccountLinkService implements AccountLinkService {
-  FakeAccountLinkService({this.isAnonymous = true, this.linkedEmail, this.memberSince});
+  FakeAccountLinkService({this.isAnonymous = true, this.linkedEmail, this.memberSince, this.firstName, this.lastName});
   @override
   bool isAnonymous;
   @override
   String? linkedEmail;
   @override
   DateTime? memberSince;
+  @override
+  String? firstName;
+  @override
+  String? lastName;
 
   final _controller = StreamController<bool>.broadcast();
 
@@ -128,7 +133,25 @@ class FakeAccountLinkService implements AccountLinkService {
   }
 
   @override
+  Future<void> setName({required String firstName, required String lastName}) async {
+    this.firstName = firstName;
+    this.lastName = lastName;
+  }
+
+  @override
   Stream<bool> get linkStatusChanges => _controller.stream;
+}
+
+class FakeDeviceAuthService implements DeviceAuthService {
+  FakeDeviceAuthService({this.supported = true, this.succeeds = true});
+  bool supported;
+  bool succeeds;
+
+  @override
+  Future<bool> isSupported() async => supported;
+
+  @override
+  Future<bool> authenticate() async => succeeds;
 }
 
 class FakeTextRecognitionService implements TextRecognitionService {

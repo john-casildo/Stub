@@ -45,6 +45,34 @@ void main() {
     expect(find.text('Email'), findsNothing); // panel not shown when already linked
   });
 
+  testWidgets('Shows a prompt to add a name when none is set, and the set name once saved', (tester) async {
+    final service = FakeAccountLinkService();
+    await tester.pumpWidget(MaterialApp(home: ProfileScreen(
+      accountLinkService: service,
+      totalEverTracked: 0,
+      categoryCount: 0,
+      activeNavIndex: 2,
+      navItems: _navItems,
+      onNavTap: (_) {},
+      onScanTap: () {},
+      onOpenSettings: () {},
+    )));
+
+    expect(find.textContaining('Add your name'), findsOneWidget);
+
+    await tester.tap(find.textContaining('Add your name'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, 'First name'), 'Ada');
+    await tester.enterText(find.widgetWithText(TextField, 'Last name'), 'Lovelace');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(service.firstName, 'Ada');
+    expect(service.lastName, 'Lovelace');
+    expect(find.text('Ada Lovelace'), findsOneWidget);
+  });
+
   testWidgets('Tapping the Settings row calls onOpenSettings', (tester) async {
     var opened = false;
     await tester.pumpWidget(MaterialApp(home: ProfileScreen(
@@ -58,6 +86,7 @@ void main() {
       onOpenSettings: () => opened = true,
     )));
 
+    await tester.ensureVisible(find.text('Settings'));
     await tester.tap(find.text('Settings'));
     expect(opened, isTrue);
   });

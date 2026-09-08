@@ -41,15 +41,18 @@ void main() {
       accountLinkService: FakeAccountLinkService(),
       localPrefs: LocalPrefs(),
       themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       textRecognitionService: FakeTextRecognitionService(),
+      deviceAuthService: FakeDeviceAuthService(),
     ));
+    await tester.pump();
 
     expect(find.text('Stub is locked'), findsOneWidget);
 
-    await tester.tap(find.text('Unlock with Face ID'));
+    await tester.tap(find.text('Unlock'));
     await tester.pumpAndSettle();
 
-    expect(find.text('LEFT TO SPEND'), findsOneWidget);
+    expect(find.text('RECENT'), findsOneWidget);
   });
 
   testWidgets('First unlock shows the backup prompt before the ledger; skipping continues past it', (tester) async {
@@ -60,10 +63,13 @@ void main() {
       accountLinkService: FakeAccountLinkService(),
       localPrefs: LocalPrefs(),
       themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       textRecognitionService: FakeTextRecognitionService(),
+      deviceAuthService: FakeDeviceAuthService(),
     ));
+    await tester.pump();
 
-    await tester.tap(find.text('Unlock with Face ID'));
+    await tester.tap(find.text('Unlock'));
     await tester.pump();
 
     expect(find.text('Back up your data'), findsOneWidget);
@@ -71,7 +77,7 @@ void main() {
     await tester.tap(find.text('Skip'));
     await tester.pumpAndSettle();
 
-    expect(find.text('LEFT TO SPEND'), findsOneWidget);
+    expect(find.text('RECENT'), findsOneWidget);
   });
 
   testWidgets(
@@ -90,15 +96,18 @@ void main() {
         accountLinkService: FakeAccountLinkService(),
         localPrefs: LocalPrefs(),
         themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+        currencyNotifier: ValueNotifier<String>("USD"),
         textRecognitionService: FakeTextRecognitionService(),
+        deviceAuthService: FakeDeviceAuthService(),
       ));
+      await tester.pump();
 
-      await tester.tap(find.text('Unlock with Face ID'));
+      await tester.tap(find.text('Unlock'));
       await tester.pumpAndSettle();
 
       // Falls straight through to RootShell — no blank screen, no
       // backup-prompt (its "already seen" flag couldn't be read either).
-      expect(find.text('LEFT TO SPEND'), findsOneWidget);
+      expect(find.text('RECENT'), findsOneWidget);
       expect(find.text('Back up your data'), findsNothing);
     },
   );
@@ -114,7 +123,9 @@ void main() {
       accountLinkService: FakeAccountLinkService(),
       localPrefs: LocalPrefs(),
       themeModeNotifier: notifier,
+      currencyNotifier: ValueNotifier<String>("USD"),
       textRecognitionService: FakeTextRecognitionService(),
+      deviceAuthService: FakeDeviceAuthService(),
     ));
 
     expect(

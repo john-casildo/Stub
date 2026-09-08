@@ -39,4 +39,23 @@ void main() {
     await prefs.setWeeklySummaryEnabled(false);
     expect(await prefs.weeklySummaryEnabled(), isFalse);
   });
+
+  test('currencyCode defaults to USD, then persists the set value', () async {
+    final prefs = LocalPrefs();
+    expect(await prefs.currencyCode(), 'USD');
+
+    await prefs.setCurrencyCode('CRC');
+    expect(await prefs.currencyCode(), 'CRC');
+  });
+
+  test('localeCode defaults to null (system), then persists the set value', () async {
+    final prefs = LocalPrefs();
+    expect(await prefs.localeCode(), isNull);
+
+    await prefs.setLocaleCode('es');
+    expect(await prefs.localeCode(), 'es');
+
+    await prefs.setLocaleCode(null);
+    expect(await prefs.localeCode(), isNull);
+  });
 }

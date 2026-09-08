@@ -35,16 +35,36 @@ void main() {
     await tester.tap(find.text('Receipt'));
     await tester.pump();
     await tester.tap(find.text('Continue'));
-    // Not pumpAndSettle: the processing stage shows an indeterminate
-    // CircularProgressIndicator, whose repeating animation never stops
-    // requesting frames — pumpAndSettle would hang waiting for it to
-    // settle. A couple of explicit pumps is enough to let the fake OCR
-    // service's async gap resolve and onScanned fire.
+    // _continue now does a real (if here immediately-failing, since the
+    // fixture path doesn't exist) dart:io file read via
+    // normalizeImageOrientation before the fake OCR call — genuine async
+    // I/O doesn't resolve via plain tester.pump() in a testWidgets test,
+    // it needs runAsync to let the real event loop complete it. Not
+    // pumpAndSettle: the processing stage's indeterminate
+    // CircularProgressIndicator never stops requesting frames.
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
     await tester.pump();
     await tester.pump();
 
     expect(scannedSource, TransactionSource.receipt);
     expect(scannedParsed, isNotNull);
+  });
+
+  testWidgets('The source picker shows a tip about flat, well-lit photos', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ScanScreen(
+          textRecognitionService: FakeTextRecognitionService(),
+          onClose: () {},
+          onScanned: (_, _) {},
+        ),
+      ),
+    );
+
+    expect(find.textContaining('well-lit'), findsOneWidget);
+    expect(find.textContaining('flat'), findsOneWidget);
   });
 
   testWidgets('Continue is disabled until a source type is picked', (tester) async {

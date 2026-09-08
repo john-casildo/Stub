@@ -13,7 +13,7 @@ void main() {
       MaterialApp(
         home: AddCategoryScreen(
           onClose: () {},
-          onSave: (name, limit, type, start, end) {
+          onSave: (name, limit, type, start, end, currencyCode) {
             savedName = name;
             savedLimit = limit;
             savedType = type;
@@ -24,12 +24,45 @@ void main() {
 
     await tester.enterText(find.byType(TextField).first, 'Groceries');
     await tester.enterText(find.byType(TextField).last, '300');
+    await tester.ensureVisible(find.text('Save category'));
     await tester.tap(find.text('Save category'));
     await tester.pump();
 
     expect(savedName, 'Groceries');
     expect(savedLimit, 300);
     expect(savedType, BudgetPeriodType.monthly); // default selection
+  });
+
+  testWidgets('Defaults to no currency override, and picking one is passed through to onSave', (tester) async {
+    String? savedCurrencyCode;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AddCategoryScreen(
+          onClose: () {},
+          onSave: (name, limit, type, start, end, currencyCode) => savedCurrencyCode = currencyCode,
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, 'Groceries');
+    await tester.ensureVisible(find.text('Save category'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save category'));
+    await tester.pump();
+    expect(savedCurrencyCode, isNull);
+
+    await tester.ensureVisible(find.text('Default'));
+    await tester.tap(find.text('Default'));
+    await tester.pumpAndSettle();
+    expect(find.text('EUR').last, findsOneWidget); // broad currency list, not just USD/CRC
+    await tester.tap(find.text('EUR').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Save category'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save category'));
+    await tester.pump();
+    expect(savedCurrencyCode, 'EUR');
   });
 
   testWidgets('Custom period with no dates set blocks save and shows a message', (tester) async {
@@ -39,7 +72,7 @@ void main() {
       MaterialApp(
         home: AddCategoryScreen(
           onClose: () {},
-          onSave: (name, limit, type, start, end) => saveCalled = true,
+          onSave: (name, limit, type, start, end, currencyCode) => saveCalled = true,
         ),
       ),
     );
@@ -47,6 +80,7 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'Groceries');
     await tester.tap(find.text('Custom'));
     await tester.pump();
+    await tester.ensureVisible(find.text('Save category'));
     await tester.ensureVisible(find.text('Save category'));
     await tester.tap(find.text('Save category'));
     await tester.pump();
@@ -62,7 +96,7 @@ void main() {
       MaterialApp(
         home: AddCategoryScreen(
           onClose: () {},
-          onSave: (name, limit, type, start, end) => saveCalled = true,
+          onSave: (name, limit, type, start, end, currencyCode) => saveCalled = true,
         ),
       ),
     );
@@ -73,6 +107,7 @@ void main() {
 
     // Pick the start date via the real Material date picker: switch to
     // input mode and type a date later than the end date we'll pick next.
+    await tester.ensureVisible(find.text('START DATE'));
     await tester.tap(find.text('START DATE'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.edit_outlined));
@@ -81,6 +116,7 @@ void main() {
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('END DATE'));
     await tester.tap(find.text('END DATE'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.edit_outlined));
@@ -89,6 +125,7 @@ void main() {
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Save category'));
     await tester.ensureVisible(find.text('Save category'));
     await tester.tap(find.text('Save category'));
     await tester.pump();

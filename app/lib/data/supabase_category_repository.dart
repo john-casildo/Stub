@@ -15,8 +15,12 @@ class SupabaseCategoryRepository implements CategoryRepository {
   }
 
   @override
-  Future<Category> create(String name) async {
-    final row = await _client.from('categories').insert({'user_id': _userId, 'name': name}).select().single();
+  Future<Category> create(String name, {String? currencyCode}) async {
+    final row = await _client
+        .from('categories')
+        .insert({'user_id': _userId, 'name': name, 'currency_code': currencyCode})
+        .select()
+        .single();
     return Category.fromRow(row);
   }
 

@@ -1,14 +1,40 @@
 import 'package:flutter/material.dart';
+import '../data/device_auth_service.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../widgets/stub_icon.dart';
 import '../widgets/stub_pressable.dart';
 
-class LockScreen extends StatelessWidget {
-  const LockScreen({super.key, required this.onUnlock, required this.onUsePasscode});
+class LockScreen extends StatefulWidget {
+  const LockScreen({super.key, required this.deviceAuthService, required this.onUnlock});
 
+  final DeviceAuthService deviceAuthService;
   final VoidCallback onUnlock;
-  final VoidCallback onUsePasscode;
+
+  @override
+  State<LockScreen> createState() => _LockScreenState();
+}
+
+class _LockScreenState extends State<LockScreen> {
+  bool _authenticating = false;
+  bool _lastAttemptFailed = false;
+
+  Future<void> _unlock() async {
+    setState(() {
+      _authenticating = true;
+      _lastAttemptFailed = false;
+    });
+    final success = await widget.deviceAuthService.authenticate();
+    if (!mounted) return;
+    if (success) {
+      widget.onUnlock();
+      return;
+    }
+    setState(() {
+      _authenticating = false;
+      _lastAttemptFailed = true;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,19 +64,26 @@ class LockScreen extends StatelessWidget {
               Text('Your ledger, kept private', style: StubText.archivo(fontSize: 13, color: paperText.withValues(alpha: 0.55))),
               const SizedBox(height: 30),
               StubPressable(
-                onTap: onUnlock,
+                onTap: _authenticating ? null : _unlock,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
                   decoration: BoxDecoration(gradient: StubColors.gradPop(Brightness.dark), borderRadius: BorderRadius.circular(10)),
-                  child: Text('Unlock with Face ID', style: StubText.archivo(fontSize: 14, fontWeight: FontWeight.w600, color: StubColors.onAccentDark)),
+                  child: _authenticating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: StubColors.onAccentDark),
+                        )
+                      : Text('Unlock', style: StubText.archivo(fontSize: 14, fontWeight: FontWeight.w600, color: StubColors.onAccentDark)),
                 ),
               ),
-              const SizedBox(height: 16),
-              StubPressable(
-                onTap: onUsePasscode,
-                ensureMinTapSize: true,
-                child: Text('Use passcode', style: StubText.archivo(fontSize: 12, color: paperText.withValues(alpha: 0.45))),
-              ),
+              if (_lastAttemptFailed) ...[
+                const SizedBox(height: 16),
+                Text(
+                  "Couldn't verify it's you — try again",
+                  style: StubText.archivo(fontSize: 12, color: paperText.withValues(alpha: 0.55)),
+                ),
+              ],
             ],
           ),
         ),

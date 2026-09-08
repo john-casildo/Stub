@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/budget_limit.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import '../util/currency.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_icon.dart';
 import '../widgets/stub_period_picker.dart';
@@ -10,7 +11,14 @@ class AddCategoryScreen extends StatefulWidget {
   const AddCategoryScreen({super.key, required this.onClose, required this.onSave});
 
   final VoidCallback onClose;
-  final void Function(String name, double limitAmount, BudgetPeriodType periodType, DateTime periodStart, DateTime? periodEnd) onSave;
+  final void Function(
+    String name,
+    double limitAmount,
+    BudgetPeriodType periodType,
+    DateTime periodStart,
+    DateTime? periodEnd,
+    String? currencyCode,
+  ) onSave;
 
   @override
   State<AddCategoryScreen> createState() => _AddCategoryScreenState();
@@ -22,6 +30,7 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
   BudgetPeriodType _periodType = BudgetPeriodType.monthly;
   DateTime? _customStart;
   DateTime? _customEnd;
+  String? _currencyCode;
 
   @override
   void dispose() {
@@ -48,7 +57,7 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
         return;
       }
     }
-    widget.onSave(name, limit, _periodType, _customStart ?? DateTime.now(), _customEnd);
+    widget.onSave(name, limit, _periodType, _customStart ?? DateTime.now(), _customEnd, _currencyCode);
   }
 
   @override
@@ -77,6 +86,21 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
                 controller: _limitController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(labelText: 'Monthly limit'),
+              ),
+              const SizedBox(height: 20),
+              Text('CURRENCY', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink.withValues(alpha: 0.5))),
+              const SizedBox(height: 10),
+              DropdownButton<String?>(
+                value: _currencyCode,
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                style: StubText.archivo(fontSize: 14, color: ink),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Default')),
+                  for (final code in supportedCurrencies)
+                    DropdownMenuItem<String?>(value: code, child: Text(code)),
+                ],
+                onChanged: (code) => setState(() => _currencyCode = code),
               ),
               const SizedBox(height: 20),
               StubPeriodPicker(

@@ -4,10 +4,12 @@ import '../data/text_recognition_service.dart';
 import '../models/transaction.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import '../util/image_orientation.dart';
 import '../util/receipt_parser.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_chip.dart';
 import '../widgets/stub_icon.dart';
+import '../widgets/stub_loading_indicator.dart';
 
 enum _ScanStage { choosingSource, choosingType, processing }
 
@@ -17,12 +19,18 @@ class ScanScreen extends StatefulWidget {
     required this.textRecognitionService,
     required this.onClose,
     required this.onScanned,
+    this.knownMerchants = const [],
     this.debugInitialImagePath,
   });
 
   final TextRecognitionService textRecognitionService;
   final VoidCallback onClose;
   final void Function(ParsedReceipt parsed, TransactionSource source) onScanned;
+
+  /// Merchant names from past transactions — lets a noisy OCR read of the
+  /// header be corrected to a name the user has already used. See
+  /// `receipt_parser.dart`'s `parseReceiptLines`.
+  final List<String> knownMerchants;
 
   /// Test-only seam: real image capture goes through `image_picker`,
   /// which can't return a fake result inside a widget test. Setting this
@@ -73,8 +81,14 @@ class _ScanScreenState extends State<ScanScreen> {
     setState(() => _stage = _ScanStage.processing);
     ParsedReceipt parsed;
     try {
-      final lines = await widget.textRecognitionService.recognizeText(imagePath);
-      parsed = parseReceiptLines(lines);
+      // ML Kit's text recognizer reads raw pixel buffers directly and
+      // does not reliably apply EXIF orientation itself — a photo taken
+      // in portrait (very common) can otherwise be processed rotated,
+      // degrading OCR accuracy and scrambling parseReceiptLines's
+      // row-based reconstruction, which assumes upright text.
+      final orientedPath = await normalizeImageOrientation(imagePath);
+      final lines = await widget.textRecognitionService.recognizeText(orientedPath);
+      parsed = parseReceiptLines(lines, knownMerchants: widget.knownMerchants, source: source);
     } catch (_) {
       parsed = const ParsedReceipt();
     }
@@ -110,7 +124,7 @@ class _ScanScreenState extends State<ScanScreen> {
                 onSelect: (s) => setState(() => _selectedSource = s),
                 onContinue: _continue,
               ),
-            _ScanStage.processing => const Center(child: CircularProgressIndicator()),
+            _ScanStage.processing => const Center(child: StubLoadingIndicator()),
           },
         ),
       ),
@@ -130,6 +144,12 @@ class _SourcePicker extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text('Scan a receipt', style: StubText.domine(fontSize: 20, color: ink)),
+        const SizedBox(height: 8),
+        Text(
+          'For best results, lay it flat on a well-lit surface and fill the frame.',
+          textAlign: TextAlign.center,
+          style: StubText.archivo(fontSize: 12, color: ink.withValues(alpha: 0.5)),
+        ),
         const SizedBox(height: 24),
         StubButton(label: 'Take photo', onPressed: onPickCamera),
         const SizedBox(height: 12),

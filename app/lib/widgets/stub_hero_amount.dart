@@ -10,10 +10,11 @@ import '../util/currency.dart';
 /// a nav label. [fontSize] is exposed because hero amounts differ in size
 /// across screens.
 class StubHeroAmount extends StatelessWidget {
-  const StubHeroAmount({super.key, required this.amount, this.fontSize = 26});
+  const StubHeroAmount({super.key, required this.amount, this.fontSize = 26, this.currencyCode});
 
   final double amount;
   final double fontSize;
+  final String? currencyCode;
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +43,7 @@ class StubHeroAmount extends StatelessWidget {
         child: child,
       ),
       child: Text(
-        formatCurrency(amount),
+        formatCurrency(amount, currencyCode: currencyCode),
         style: StubText.unbounded(fontSize: fontSize, color: Colors.white),
       ),
     );

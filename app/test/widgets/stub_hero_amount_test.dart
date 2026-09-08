@@ -42,4 +42,14 @@ void main() {
     expect(find.text(r'$1,842.30'), findsOneWidget);
     expect(find.byType(ShaderMask), findsOneWidget);
   });
+
+  testWidgets('StubHeroAmount uses currencyCode to override the displayed symbol', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Center(child: StubHeroAmount(amount: 1842.30, currencyCode: 'CRC')),
+      ),
+    );
+
+    expect(find.text('₡1,842.30'), findsOneWidget);
+  });
 }

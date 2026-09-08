@@ -39,6 +39,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Stub uses the camera to scan receipts on your device — images are never uploaded.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Stub uses Face ID to keep your ledger private.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Stub lets you pick an existing screenshot or photo to scan — images are never uploaded.</string>
 	<key>UIApplicationSceneManifest</key>

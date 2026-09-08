@@ -2,6 +2,7 @@
 import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:stub/data/text_recognition_service.dart';
+import 'package:stub/models/transaction.dart';
 import 'package:stub/util/receipt_parser.dart';
 
 RecognizedLine _line(String text, {double top = 0, double left = 0, double height = 20}) =>
@@ -77,10 +78,78 @@ void main() {
       expect(result.amount, 12.99);
     });
 
+    test('for a receipt scan, ignores a "Monto" line and picks the real Total line', () {
+      final lines = [
+        _line('Monto \$99.00', top: 0),
+        _line('Total \$10.00', top: 20),
+      ];
+      final result = parseReceiptLines(lines, source: TransactionSource.receipt);
+      expect(result.amount, 10.00);
+    });
+
+    test('for a payment-app scan, recognizes "Monto" as a total-style keyword too', () {
+      final lines = [
+        _line('Monto \$99.00', top: 0),
+        _line('Total \$10.00', top: 20),
+      ];
+      final result = parseReceiptLines(lines, source: TransactionSource.paymentApp);
+      // Both lines carry a recognized keyword for this source; the larger
+      // of the two wins (same "grand total >= subtotal" reasoning already
+      // applied within a single source's keyword set).
+      expect(result.amount, 99.00);
+    });
+
+    test('defaults to receipt-style keywords when no source is given', () {
+      final lines = [
+        _line('Monto \$99.00', top: 0),
+        _line('Total \$10.00', top: 20),
+      ];
+      final result = parseReceiptLines(lines);
+      expect(result.amount, 10.00);
+    });
+
+    test('joins a total label and its amount when OCR splits them into separate columns on the same row', () {
+      // Common real-world layout: "TOTAL:" and its number are visually on
+      // the same printed row but OCR'd as two separate text blocks (a
+      // wide gap between the left-aligned label and right-aligned
+      // number). A larger, unrelated number (cash tendered) sits on a
+      // later row and must not win just because it's numerically bigger.
+      final lines = [
+        _line('TOTAL:', top: 0, left: 0),
+        _line('5,415.00', top: 0, left: 150),
+        _line('EFECTIVO', top: 20, left: 0),
+        _line('10,000.00', top: 20, left: 150),
+      ];
+      final result = parseReceiptLines(lines);
+      expect(result.amount, 5415.00);
+    });
+
     test('returns null amount when no currency-shaped number is found', () {
       final lines = [_line('Corner Market'), _line('Thank you for shopping')];
       final result = parseReceiptLines(lines);
       expect(result.amount, isNull);
+    });
+
+    test('prefers a known merchant name when a line fuzzy-matches it, over the raw first line', () {
+      // OCR misread the merchant header ("AUT0 MERC4D0 S.A" instead of
+      // "Auto Mercado S.A.") but it's close enough to a merchant already
+      // seen in past transactions — use the clean known name instead of
+      // propagating the OCR noise into a new transaction.
+      final lines = [
+        _line('AUT0 MERC4D0 S.A', top: 0),
+        _line('Total \$20.00', top: 20),
+      ];
+      final result = parseReceiptLines(lines, knownMerchants: const ['Auto Mercado S.A.']);
+      expect(result.merchant, 'Auto Mercado S.A.');
+    });
+
+    test('falls back to the first line when no known merchant is close enough', () {
+      final lines = [
+        _line('Corner Market', top: 0),
+        _line('Total \$20.00', top: 20),
+      ];
+      final result = parseReceiptLines(lines, knownMerchants: const ['Costco', 'Walmart']);
+      expect(result.merchant, 'Corner Market');
     });
 
     test('redacts a long digit run before it can appear as the merchant guess', () {
@@ -94,6 +163,19 @@ void main() {
       final lines = [_line('2026-03-05')];
       final result = parseReceiptLines(lines);
       expect(result.occurredAt, DateTime(2026, 3, 5));
+    });
+
+    test('skips a reference-number line that looks like a date but has an invalid month', () {
+      // "REFERENCIA INTERNA: 13-2-1520258" matches the MM-DD-YYYY shape
+      // but "13" isn't a real month — must not be accepted as a date
+      // (Dart's DateTime would silently roll month 13 over into January
+      // of the following year, producing a garbage date).
+      final lines = [
+        _line('REFERENCIA INTERNA: 13-2-1520258', top: 0),
+        _line('06/09/2026', top: 20),
+      ];
+      final result = parseReceiptLines(lines);
+      expect(result.occurredAt, DateTime(2026, 6, 9));
     });
   });
 }

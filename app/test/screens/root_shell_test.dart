@@ -18,6 +18,7 @@ import 'package:stub/screens/root_shell.dart';
 import 'package:stub/screens/scan_screen.dart';
 import 'package:stub/util/receipt_parser.dart';
 import 'package:stub/widgets/stub_bottom_nav.dart';
+import 'package:stub/widgets/stub_loading_indicator.dart';
 
 const _pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
 const _shareChannel = MethodChannel('dev.fluttercommunity.plus/share');
@@ -34,15 +35,16 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
     await tester.pumpAndSettle();
-    expect(find.text('LEFT TO SPEND'), findsOneWidget);
+    expect(find.text('RECENT'), findsOneWidget);
 
     await tester.tap(find.text('Budgets'));
     await tester.pumpAndSettle();
-    expect(find.text('BUDGETED THIS MONTH'), findsOneWidget);
+    expect(find.text('CATEGORY LIMITS'), findsOneWidget);
   });
 
   testWidgets('Profile tab shows the real ProfileScreen, not Ledger content', (tester) async {
@@ -52,6 +54,7 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -61,7 +64,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Anonymous — not backed up'), findsOneWidget);
-    expect(find.text('LEFT TO SPEND'), findsNothing); // no longer falling back to Ledger
+    expect(find.text('RECENT'), findsNothing); // no longer falling back to Ledger
     final nav = tester.widget<StubBottomNav>(find.byType(StubBottomNav));
     expect(nav.activeIndex, 2);
   });
@@ -73,12 +76,15 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
@@ -101,6 +107,7 @@ void main() {
       budgetRepository: budgets,
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -108,9 +115,13 @@ void main() {
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Delete all data'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete all data'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete everything'));
@@ -144,6 +155,7 @@ void main() {
       budgetRepository: budgets,
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -151,9 +163,13 @@ void main() {
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Delete all data'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete all data'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete everything'));
@@ -180,6 +196,7 @@ void main() {
       budgetRepository: budgets,
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -187,9 +204,13 @@ void main() {
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Delete all data'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete all data'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete everything'));
@@ -203,7 +224,7 @@ void main() {
 
     // Blocking dialog is up, and Settings' own close (X) button is no
     // longer reachable through it (the dialog's barrier absorbs taps).
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(StubLoadingIndicator), findsOneWidget);
     expect(find.byType(AlertDialog), findsNothing); // confirm dialog already dismissed
     expect(find.text('THEME'), findsOneWidget); // Settings is still the route underneath
 
@@ -211,7 +232,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Dialog gone, Settings popped back to Profile, delete completed.
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(StubLoadingIndicator), findsNothing);
     expect(find.text('THEME'), findsNothing);
   });
 
@@ -233,6 +254,7 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -240,9 +262,13 @@ void main() {
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Export data'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Export data'));
     await tester.pumpAndSettle();
 
@@ -297,12 +323,15 @@ void main() {
       budgetRepository: budgets,
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
@@ -314,6 +343,8 @@ void main() {
     // `runAsync`, which switches to a real zone for its duration. See
     // `exportTransactionsCsv`/`_fetchAllTransactions` in `root_shell.dart`.
     await tester.runAsync(() async {
+      await tester.ensureVisible(find.text('Export data'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Export data'));
       // Give the fire-and-forget `_exportData()` future — kicked off by the
       // tap above but not awaited by the widget itself — a real chance to
@@ -338,6 +369,7 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -346,14 +378,14 @@ void main() {
     await tester.tap(find.text('Budgets'));
     await tester.pumpAndSettle();
 
-    expect(find.text('BUDGETED THIS MONTH'), findsOneWidget);
-    expect(find.text('LEFT TO SPEND'), findsNothing);
+    expect(find.text('CATEGORY LIMITS'), findsOneWidget);
+    expect(find.text('RECENT'), findsNothing);
 
     await tester.tap(find.text('Home'));
     await tester.pumpAndSettle();
 
-    expect(find.text('LEFT TO SPEND'), findsOneWidget);
-    expect(find.text('BUDGETED THIS MONTH'), findsNothing);
+    expect(find.text('RECENT'), findsOneWidget);
+    expect(find.text('CATEGORY LIMITS'), findsNothing);
   });
 
   testWidgets('RootShell loads real data from its repositories and shows it', (tester) async {
@@ -378,6 +410,7 @@ void main() {
       budgetRepository: budgets,
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -393,12 +426,13 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
 
     // Loading state visible on the very first frame, before the failing future resolves.
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(StubLoadingIndicator), findsOneWidget);
 
     await tester.pumpAndSettle();
     expect(find.textContaining('Something went wrong'), findsOneWidget);
@@ -416,6 +450,7 @@ void main() {
       budgetRepository: budgets,
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -436,6 +471,7 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -458,6 +494,7 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -502,6 +539,7 @@ void main() {
       budgetRepository: budgets,
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -509,9 +547,13 @@ void main() {
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Settings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Delete all data'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete all data'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete everything'));
@@ -557,6 +599,7 @@ void main() {
       budgetRepository: budgets,
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -584,6 +627,7 @@ void main() {
       budgetRepository: budgets,
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -632,6 +676,7 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -660,6 +705,7 @@ void main() {
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
       themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
     )));
@@ -678,7 +724,7 @@ void main() {
     await tester.tap(find.byType(IconButton).first); // ScanScreen's X close button
     await tester.pumpAndSettle();
     expect(find.byType(ScanScreen), findsNothing);
-    expect(find.text('LEFT TO SPEND'), findsOneWidget); // back on the ledger, RootShell intact
+    expect(find.text('RECENT'), findsOneWidget); // back on the ledger, RootShell intact
 
     // The stale onScanned callback fires anyway.
     onScanned(const ParsedReceipt(merchant: 'Late Result', amount: 5), TransactionSource.receipt);
@@ -694,7 +740,7 @@ void main() {
     // Closing it lands back on an intact ledger, not a blank/crashed app.
     await tester.tap(find.byType(IconButton).first); // EditEntryScreen's X close button
     await tester.pumpAndSettle();
-    expect(find.text('LEFT TO SPEND'), findsOneWidget);
+    expect(find.text('RECENT'), findsOneWidget);
     expect(find.byKey(const Key('stub-bottom-nav-scan-button')), findsOneWidget);
   });
 }
@@ -706,7 +752,7 @@ class _FailingCategoryRepository implements CategoryRepository {
   Future<List<Category>> list() async => throw Exception('boom');
 
   @override
-  Future<Category> create(String name) async => throw UnimplementedError();
+  Future<Category> create(String name, {String? currencyCode}) async => throw UnimplementedError();
 
   @override
   Future<void> delete(String id) async => throw UnimplementedError();
@@ -727,7 +773,7 @@ class _RestrictingCategoryRepository implements CategoryRepository {
   Future<List<Category>> list() => _categories.list();
 
   @override
-  Future<Category> create(String name) => _categories.create(name);
+  Future<Category> create(String name, {String? currencyCode}) => _categories.create(name, currencyCode: currencyCode);
 
   @override
   Future<void> delete(String id) async {

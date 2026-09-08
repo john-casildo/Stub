@@ -9,6 +9,8 @@ class LocalPrefs {
   static const _themeModeKey = 'theme_mode';
   static const _budgetWarningsEnabledKey = 'budget_warnings_enabled';
   static const _weeklySummaryEnabledKey = 'weekly_summary_enabled';
+  static const _currencyCodeKey = 'currency_code';
+  static const _localeCodeKey = 'locale_code';
 
   Future<bool> hasSeenBackupPrompt() async {
     final prefs = await SharedPreferences.getInstance();
@@ -49,5 +51,31 @@ class LocalPrefs {
   Future<void> setWeeklySummaryEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_weeklySummaryEnabledKey, value);
+  }
+
+  Future<String> currencyCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_currencyCodeKey) ?? 'USD';
+  }
+
+  Future<void> setCurrencyCode(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_currencyCodeKey, value);
+  }
+
+  /// Null means "follow the system locale" — the default until the user
+  /// picks an explicit language in Settings.
+  Future<String?> localeCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_localeCodeKey);
+  }
+
+  Future<void> setLocaleCode(String? value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value == null) {
+      await prefs.remove(_localeCodeKey);
+    } else {
+      await prefs.setString(_localeCodeKey, value);
+    }
   }
 }

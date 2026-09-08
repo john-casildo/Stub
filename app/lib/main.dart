@@ -4,6 +4,8 @@ import 'config/supabase_config.dart';
 import 'data/account_link_service.dart';
 import 'data/budget_repository.dart';
 import 'data/category_repository.dart';
+import 'data/device_auth_service.dart';
+import 'data/local_auth_device_auth_service.dart';
 import 'data/local_prefs.dart';
 import 'data/mlkit_text_recognition_service.dart';
 import 'data/supabase_account_link_service.dart';
@@ -18,7 +20,9 @@ import 'screens/root_shell.dart';
 import 'theme/app_theme.dart';
 import 'theme/colors.dart';
 import 'theme/text.dart';
+import 'util/currency.dart';
 import 'widgets/stub_button.dart';
+import 'widgets/stub_loading_indicator.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,9 +30,10 @@ void main() {
 }
 
 class _StartupResult {
-  _StartupResult({required this.localPrefs, required this.themeModeNotifier});
+  _StartupResult({required this.localPrefs, required this.themeModeNotifier, required this.currencyNotifier});
   final LocalPrefs localPrefs;
   final ValueNotifier<ThemeMode> themeModeNotifier;
+  final ValueNotifier<String> currencyNotifier;
 }
 
 /// `Supabase.initialize` is safe to call more than once (it no-ops if
@@ -42,7 +47,14 @@ Future<_StartupResult> _startup() async {
   await _ensureSession();
   final localPrefs = LocalPrefs();
   final themeModeNotifier = ValueNotifier<ThemeMode>(await localPrefs.themeMode());
-  return _StartupResult(localPrefs: localPrefs, themeModeNotifier: themeModeNotifier);
+  final currencyCode = await localPrefs.currencyCode();
+  CurrencyConfig.code = currencyCode;
+  final currencyNotifier = ValueNotifier<String>(currencyCode);
+  return _StartupResult(
+    localPrefs: localPrefs,
+    themeModeNotifier: themeModeNotifier,
+    currencyNotifier: currencyNotifier,
+  );
 }
 
 Future<void> _ensureSession() async {
@@ -82,7 +94,7 @@ class _StartupGateState extends State<_StartupGate> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const _StartupScaffold(child: CircularProgressIndicator());
+          return const _StartupScaffold(child: StubLoadingIndicator());
         }
         if (snapshot.hasError) {
           return _StartupScaffold(child: _StartupError(onRetry: _retry));
@@ -95,7 +107,9 @@ class _StartupGateState extends State<_StartupGate> {
           accountLinkService: SupabaseAccountLinkService(Supabase.instance.client),
           localPrefs: result.localPrefs,
           themeModeNotifier: result.themeModeNotifier,
+          currencyNotifier: result.currencyNotifier,
           textRecognitionService: MlKitTextRecognitionService(),
+          deviceAuthService: LocalAuthDeviceAuthService(),
         );
       },
     );
@@ -158,7 +172,25 @@ class _StartupError extends StatelessWidget {
   }
 }
 
-class StubApp extends StatelessWidget {
+/// Shows the lock screen until unlocked via [DeviceAuthService] (real
+/// biometric/passcode auth), then the real app. Re-locks immediately
+/// whenever the app leaves the foreground, so backgrounding always
+/// requires re-auth on return — the "kept private" promise on
+/// [LockScreen] needs both halves (gate on entry, re-gate on return) to
+/// be true. Devices with no biometric/passcode enrolled at all have
+/// nothing to gate on, so they skip the lock screen entirely.
+///
+/// The lock screen is overlaid via `MaterialApp.builder`, which wraps the
+/// *entire* Navigator (the home route plus anything `RootShell` has
+/// pushed on top of it via that same shared Navigator) — not swapped in
+/// as the home route's content. Swapping content in `home` would unmount
+/// `RootShell` (and anything it pushed) every time the app re-locks,
+/// which both crashed a pushed screen's now-stale `Navigator.of(context)`
+/// closures and, worse, left the lock screen invisible behind whatever
+/// route happened to be on top. Overlaying instead means `RootShell` and
+/// its pushed screens stay mounted for the life of the app, and the lock
+/// screen covers them regardless of navigation depth.
+class StubApp extends StatefulWidget {
   const StubApp({
     super.key,
     required this.categoryRepository,
@@ -167,7 +199,9 @@ class StubApp extends StatelessWidget {
     required this.accountLinkService,
     required this.localPrefs,
     required this.themeModeNotifier,
+    required this.currencyNotifier,
     required this.textRecognitionService,
+    required this.deviceAuthService,
   });
 
   final CategoryRepository categoryRepository;
@@ -176,68 +210,69 @@ class StubApp extends StatelessWidget {
   final AccountLinkService accountLinkService;
   final LocalPrefs localPrefs;
   final ValueNotifier<ThemeMode> themeModeNotifier;
+  final ValueNotifier<String> currencyNotifier;
   final TextRecognitionService textRecognitionService;
+  final DeviceAuthService deviceAuthService;
 
   @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeModeNotifier,
-      builder: (context, mode, _) => MaterialApp(
-        title: 'Stub',
-        debugShowCheckedModeBanner: false,
-        theme: StubTheme.light(),
-        darkTheme: StubTheme.dark(),
-        themeMode: mode,
-        home: _LockGate(
-          categoryRepository: categoryRepository,
-          transactionRepository: transactionRepository,
-          budgetRepository: budgetRepository,
-          accountLinkService: accountLinkService,
-          localPrefs: localPrefs,
-          themeModeNotifier: themeModeNotifier,
-          textRecognitionService: textRecognitionService,
-        ),
-      ),
-    );
-  }
+  State<StubApp> createState() => _StubAppState();
 }
 
-/// Shows the lock screen until unlocked, then the real app. Real Face
-/// ID/biometric wiring (the `local_auth` package is already a dependency)
-/// is separate follow-up work — this just gates on a boolean for now, so
-/// the screen and the navigation shell are both real and testable before
-/// that wiring exists.
-class _LockGate extends StatefulWidget {
-  const _LockGate({
-    required this.categoryRepository,
-    required this.transactionRepository,
-    required this.budgetRepository,
-    required this.accountLinkService,
-    required this.localPrefs,
-    required this.themeModeNotifier,
-    required this.textRecognitionService,
-  });
-
-  final CategoryRepository categoryRepository;
-  final TransactionRepository transactionRepository;
-  final BudgetRepository budgetRepository;
-  final AccountLinkService accountLinkService;
-  final LocalPrefs localPrefs;
-  final ValueNotifier<ThemeMode> themeModeNotifier;
-  final TextRecognitionService textRecognitionService;
-
-  @override
-  State<_LockGate> createState() => _LockGateState();
-}
-
-class _LockGateState extends State<_LockGate> {
+class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
   bool _unlocked = false;
+  // null: still checking whether this device has any biometric/passcode
+  // enrolled at all; true/false once known.
+  bool? _supported;
   // null: still checking the flag right after unlock; true: show the
   // one-time prompt; false: skip it (already seen, or just dismissed).
   bool? _showBackupPrompt;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.currencyNotifier.addListener(_syncCurrencyConfig);
+    _checkSupport();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.currencyNotifier.removeListener(_syncCurrencyConfig);
+    super.dispose();
+  }
+
+  void _syncCurrencyConfig() {
+    CurrencyConfig.code = widget.currencyNotifier.value;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_unlocked || _supported != true) return;
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      setState(() => _unlocked = false);
+    }
+  }
+
+  Future<void> _checkSupport() async {
+    bool supported = true;
+    try {
+      supported = await widget.deviceAuthService.isSupported();
+    } catch (_) {
+      // Can't tell — fail toward requiring auth rather than silently
+      // granting access.
+    }
+    if (!mounted) return;
+    setState(() => _supported = supported);
+    if (!supported) await _handleUnlock();
+  }
+
   Future<void> _handleUnlock() async {
     setState(() => _unlocked = true);
+    // Backup-prompt bookkeeping only needs to run once, the first time
+    // the app is ever unlocked — a later re-lock/re-unlock cycle
+    // shouldn't re-show it.
+    if (_showBackupPrompt != null) return;
     bool showPrompt = false;
     try {
       final alreadySeen = await widget.localPrefs.hasSeenBackupPrompt();
@@ -256,15 +291,14 @@ class _LockGateState extends State<_LockGate> {
     setState(() => _showBackupPrompt = showPrompt);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (!_unlocked) {
-      return LockScreen(
-        onUnlock: _handleUnlock,
-        onUsePasscode: _handleUnlock,
-      );
-    }
-    if (_showBackupPrompt == null) {
+  bool get _showLock => _supported == true && !_unlocked;
+
+  Widget _buildHome() {
+    // Nothing to show yet — either still checking device support, or
+    // (before the very first unlock) _showBackupPrompt hasn't been
+    // decided. Either way the lock overlay (or nothing, pre-_supported)
+    // is covering this.
+    if (_supported == null || _showBackupPrompt == null) {
       return const SizedBox.shrink();
     }
     if (_showBackupPrompt == true) {
@@ -279,8 +313,34 @@ class _LockGateState extends State<_LockGate> {
       budgetRepository: widget.budgetRepository,
       accountLinkService: widget.accountLinkService,
       themeModeNotifier: widget.themeModeNotifier,
+      currencyNotifier: widget.currencyNotifier,
       localPrefs: widget.localPrefs,
       textRecognitionService: widget.textRecognitionService,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: widget.themeModeNotifier,
+      builder: (context, mode, _) => MaterialApp(
+        title: 'Stub',
+        debugShowCheckedModeBanner: false,
+        theme: StubTheme.light(),
+        darkTheme: StubTheme.dark(),
+        themeMode: mode,
+        builder: (context, child) => Stack(
+          children: [
+            if (child != null) IgnorePointer(ignoring: _showLock, child: child),
+            if (_showLock)
+              LockScreen(
+                deviceAuthService: widget.deviceAuthService,
+                onUnlock: _handleUnlock,
+              ),
+          ],
+        ),
+        home: _buildHome(),
+      ),
     );
   }
 }

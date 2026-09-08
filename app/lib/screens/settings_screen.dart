@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../data/local_prefs.dart';
+import '../util/currency.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_card.dart';
 import '../widgets/stub_chip.dart';
 import '../widgets/stub_icon.dart';
+import '../widgets/stub_loading_indicator.dart';
 
 /// Settings screen — theme picker, notification toggles (not yet wired to
 /// real notifications), data export/delete slots (wired in Tasks 5/6), and
@@ -15,6 +17,7 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.localPrefs,
     required this.themeModeNotifier,
+    required this.currencyNotifier,
     required this.onClose,
     required this.onExportData,
     required this.onDeleteAllData,
@@ -22,6 +25,7 @@ class SettingsScreen extends StatefulWidget {
 
   final LocalPrefs localPrefs;
   final ValueNotifier<ThemeMode> themeModeNotifier;
+  final ValueNotifier<String> currencyNotifier;
   final VoidCallback onClose;
   final VoidCallback onExportData;
   final VoidCallback onDeleteAllData;
@@ -32,6 +36,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   ThemeMode? _themeMode;
+  String? _currencyCode;
   bool? _budgetWarnings;
   bool? _weeklySummary;
 
@@ -49,10 +54,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// way out.
   Future<void> _load() async {
     ThemeMode theme = ThemeMode.system;
+    String currency = CurrencyConfig.code;
     bool warnings = true;
     bool summary = true;
     try {
       theme = await widget.localPrefs.themeMode();
+      currency = await widget.localPrefs.currencyCode();
       warnings = await widget.localPrefs.budgetWarningsEnabled();
       summary = await widget.localPrefs.weeklySummaryEnabled();
     } catch (_) {
@@ -61,6 +68,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     setState(() {
       _themeMode = theme;
+      _currencyCode = currency;
       _budgetWarnings = warnings;
       _weeklySummary = summary;
     });
@@ -71,6 +79,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     widget.themeModeNotifier.value = mode;
     try {
       await widget.localPrefs.setThemeMode(mode);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save that setting. Please try again.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _setCurrencyCode(String code) async {
+    setState(() => _currencyCode = code);
+    widget.currencyNotifier.value = code;
+    try {
+      await widget.localPrefs.setCurrencyCode(code);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -120,7 +142,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return Scaffold(
         backgroundColor: isDark ? StubColors.bgDark : StubColors.bgLight,
         appBar: appBar,
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: StubLoadingIndicator()),
       );
     }
 
@@ -142,6 +164,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   StubChip(label: 'Dark', selected: _themeMode == ThemeMode.dark, onTap: () => _setThemeMode(ThemeMode.dark)),
                   StubChip(label: 'System', selected: _themeMode == ThemeMode.system, onTap: () => _setThemeMode(ThemeMode.system)),
                 ],
+              ),
+              const SizedBox(height: 24),
+              Text('CURRENCY', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
+              const SizedBox(height: 10),
+              DropdownButton<String>(
+                value: _currencyCode,
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                dropdownColor: isDark ? StubColors.bgDark : StubColors.bgLight,
+                style: StubText.archivo(fontSize: 14, color: ink),
+                items: [
+                  for (final code in supportedCurrencies)
+                    DropdownMenuItem(value: code, child: Text(code)),
+                ],
+                onChanged: (code) {
+                  if (code != null) _setCurrencyCode(code);
+                },
               ),
               const SizedBox(height: 24),
               Text('NOTIFICATIONS', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),

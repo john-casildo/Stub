@@ -18,8 +18,10 @@ import '../util/receipt_parser.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_icon.dart';
+import '../widgets/stub_loading_indicator.dart';
 import 'add_category_screen.dart';
 import 'budgets_screen.dart';
+import 'category_detail_screen.dart';
 import 'edit_entry_screen.dart';
 import 'ledger_screen.dart';
 import 'manual_entry_screen.dart';
@@ -52,6 +54,7 @@ class RootShell extends StatefulWidget {
     required this.budgetRepository,
     required this.accountLinkService,
     required this.themeModeNotifier,
+    required this.currencyNotifier,
     required this.localPrefs,
     required this.textRecognitionService,
   });
@@ -61,6 +64,7 @@ class RootShell extends StatefulWidget {
   final BudgetRepository budgetRepository;
   final AccountLinkService accountLinkService;
   final ValueNotifier<ThemeMode> themeModeNotifier;
+  final ValueNotifier<String> currencyNotifier;
   final LocalPrefs localPrefs;
   final TextRecognitionService textRecognitionService;
 
@@ -71,6 +75,13 @@ class RootShell extends StatefulWidget {
 class _RootShellState extends State<RootShell> {
   int _tabIndex = 0;
   late Future<_ShellData> _dataFuture;
+  // The last successfully-loaded data, kept around so a reload triggered
+  // after a write (_guardedWrite always calls _reload()) can keep
+  // rendering real content instead of tearing the whole screen down to a
+  // spinner while refetching — that both flashes distractingly and, since
+  // it unmounts LedgerScreen/StubProgressRing entirely, made the progress
+  // ring restart its fill animation from zero on every single write.
+  _ShellData? _lastData;
 
   @override
   void initState() {
@@ -89,12 +100,40 @@ class _RootShellState extends State<RootShell> {
         _dataFuture = _load();
       });
 
-  void _openScan() {
+  /// The category's budget fraction (period-scoped progress toward its
+  /// limit) — null when the category has no budget at all, so there's
+  /// nothing to show a percentage of.
+  double? _fractionFor(_ShellData data, String categoryId) {
+    for (final budget in data.budgets) {
+      if (budget.categoryId == categoryId) return budget.fraction;
+    }
+    return null;
+  }
+
+  String? _currencyCodeFor(_ShellData data, String categoryId) {
+    for (final category in data.categories) {
+      if (category.id == categoryId) return category.currencyCode;
+    }
+    return null;
+  }
+
+  /// Pull-to-refresh needs a `Future` it can await to know when to hide
+  /// the spinner — `_reload` itself is fire-and-forget (`setState` just
+  /// swaps in a new future), so this kicks off the same reload and then
+  /// waits on it.
+  Future<void> _handleRefresh() {
+    _reload();
+    return _dataFuture;
+  }
+
+  void _openScan(List<Transaction> transactions) {
+    final knownMerchants = {for (final t in transactions) t.merchant}.toList();
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ScanScreen(
         textRecognitionService: widget.textRecognitionService,
         onClose: () => Navigator.of(context).pop(),
         onScanned: (parsed, source) => _handleScanned(parsed, source),
+        knownMerchants: knownMerchants,
       ),
     ));
   }
@@ -182,11 +221,29 @@ class _RootShellState extends State<RootShell> {
     ));
   }
 
+  /// Opened by tapping a category row on `LedgerScreen` or a budget row
+  /// on `BudgetsScreen` — every transaction saved under [categoryId],
+  /// reusing `_openEditEntry` for the tap-through so correcting an entry
+  /// works the same way it does everywhere else.
+  void _openCategoryDetail(String categoryId, String categoryName, _ShellData data) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => CategoryDetailScreen(
+        categoryName: categoryName,
+        transactions: data.transactions.where((t) => t.categoryId == categoryId).toList(),
+        onClose: () => Navigator.of(context).pop(),
+        onTransactionTap: (t) => _openEditEntry(t, data.categories),
+        fraction: _fractionFor(data, categoryId),
+        currencyCode: _currencyCodeFor(data, categoryId),
+      ),
+    ));
+  }
+
   void _openSettings(_ShellData data) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => SettingsScreen(
         localPrefs: widget.localPrefs,
         themeModeNotifier: widget.themeModeNotifier,
+        currencyNotifier: widget.currencyNotifier,
         onClose: () => Navigator.of(context).pop(),
         onExportData: _exportData,
         onDeleteAllData: () => _deleteAllData(data),
@@ -247,7 +304,7 @@ class _RootShellState extends State<RootShell> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      builder: (_) => const Center(child: StubLoadingIndicator()),
     );
     try {
       var batch = await widget.transactionRepository.list();
@@ -284,8 +341,8 @@ class _RootShellState extends State<RootShell> {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => AddCategoryScreen(
         onClose: () => Navigator.of(context).pop(),
-        onSave: (name, limitAmount, periodType, periodStart, periodEnd) => _guardedWrite(() async {
-          final category = await widget.categoryRepository.create(name);
+        onSave: (name, limitAmount, periodType, periodStart, periodEnd, currencyCode) => _guardedWrite(() async {
+          final category = await widget.categoryRepository.create(name, currencyCode: currencyCode);
           try {
             await widget.budgetRepository.create(
               categoryId: category.id,
@@ -375,45 +432,50 @@ class _RootShellState extends State<RootShell> {
         final bg = isDark ? StubColors.bgDark : StubColors.bgLight;
         final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
 
-        if (snapshot.connectionState != ConnectionState.done) {
-          return Scaffold(
-            backgroundColor: bg,
-            body: const Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasError) {
-          return Scaffold(
-            backgroundColor: bg,
-            body: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Something went wrong loading your data.', style: StubText.archivo(fontSize: 14, color: ink)),
-                  const SizedBox(height: 16),
-                  StubButton(label: 'Retry', onPressed: _reload),
-                ],
-              ),
-            ),
-          );
-        }
+        if (snapshot.hasData) _lastData = snapshot.data;
+        final data = snapshot.data ?? _lastData;
 
-        final data = snapshot.data!;
+        if (data == null) {
+          if (snapshot.hasError) {
+            return Scaffold(
+              backgroundColor: bg,
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Something went wrong loading your data.', style: StubText.archivo(fontSize: 14, color: ink)),
+                    const SizedBox(height: 16),
+                    StubButton(label: 'Retry', onPressed: _reload),
+                  ],
+                ),
+              ),
+            );
+          }
+          return Scaffold(
+            backgroundColor: bg,
+            body: const Center(child: StubLoadingIndicator()),
+          );
+        }
+        // A reload that fails while we already have `_lastData` (e.g. a
+        // transient network blip on a background refresh) just keeps
+        // showing that last-known-good data rather than replacing the
+        // whole screen with a hard error — only the true first load (no
+        // data at all yet) surfaces the retry screen above.
+
         final Widget content;
 
         if (_tabIndex == 1) {
-          final totalBudgeted = data.budgets.fold<double>(0, (sum, b) => sum + b.limit);
-          final totalSpent = data.budgets.fold<double>(0, (sum, b) => sum + b.spent);
           content = BudgetsScreen(
             monthLabel: _monthLabel(),
-            totalBudgeted: totalBudgeted,
-            totalSpent: totalSpent,
             budgets: data.budgets,
             activeNavIndex: _tabIndex,
             navItems: _navItems,
             onNavTap: (i) => setState(() => _tabIndex = i),
-            onScanTap: _openScan,
+            onScanTap: () => _openScan(data.transactions),
             onAddCategory: _openAddCategory,
             onDeleteCategory: _deleteCategory,
+            onRefresh: _handleRefresh,
+            onCategoryTap: (b) => _openCategoryDetail(b.categoryId, b.name, data),
           );
         } else if (_tabIndex == 2) {
           final totalEverTracked = data.transactions.fold<double>(0, (sum, t) => sum + t.amount);
@@ -424,15 +486,10 @@ class _RootShellState extends State<RootShell> {
             activeNavIndex: _tabIndex,
             navItems: _navItems,
             onNavTap: (i) => setState(() => _tabIndex = i),
-            onScanTap: _openScan,
+            onScanTap: () => _openScan(data.transactions),
             onOpenSettings: () => _openSettings(data),
           );
         } else {
-          final totalLimit = data.budgets.fold<double>(0, (sum, b) => sum + b.limit);
-          final totalSpent = data.budgets.fold<double>(0, (sum, b) => sum + b.spent);
-          final leftToSpend = totalLimit - totalSpent;
-          final leftToSpendFraction = totalLimit == 0 ? 0.0 : (1 - totalSpent / totalLimit).clamp(0.0, 1.0);
-
           // CategorySpend (and its per-category color) needs
           // Theme.of(context).brightness, which only exists here inside
           // build() — not inside the async _load() above, which runs
@@ -441,26 +498,25 @@ class _RootShellState extends State<RootShell> {
           final categorySpends = <CategorySpend>[
             for (var i = 0; i < data.categories.length; i++)
               CategorySpend(
+                categoryId: data.categories[i].id,
                 name: data.categories[i].name,
-                amount: data.transactions
-                    .where((t) => t.categoryId == data.categories[i].id)
-                    .fold<double>(0, (sum, t) => sum + t.amount),
+                fraction: _fractionFor(data, data.categories[i].id),
                 color: categoryColor(i, brightness),
               ),
           ];
 
           content = LedgerScreen(
             monthLabel: _monthLabel(),
-            leftToSpend: leftToSpend,
-            leftToSpendFraction: leftToSpendFraction,
             categories: categorySpends,
             recent: data.transactions,
             activeNavIndex: _tabIndex,
             navItems: _navItems,
             onNavTap: (i) => setState(() => _tabIndex = i),
-            onScanTap: _openScan,
+            onScanTap: () => _openScan(data.transactions),
             onAddManualEntry: () => _openManualEntry(data.categories),
             onTransactionTap: (t) => _openEditEntry(t, data.categories),
+            onRefresh: _handleRefresh,
+            onCategoryTap: (c) => _openCategoryDetail(c.categoryId, c.name, data),
           );
         }
 

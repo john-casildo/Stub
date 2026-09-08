@@ -51,6 +51,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${_months[date.month - 1]} ${date.year}';
   }
 
+  Future<void> _editName() async {
+    final service = widget.accountLinkService;
+    final firstController = TextEditingController(text: service.firstName ?? '');
+    final lastController = TextEditingController(text: service.lastName ?? '');
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Your name'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: firstController, autofocus: true, decoration: const InputDecoration(labelText: 'First name')),
+            TextField(controller: lastController, decoration: const InputDecoration(labelText: 'Last name')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (saved != true) return;
+    final firstName = firstController.text.trim();
+    final lastName = lastController.text.trim();
+    if (firstName.isEmpty && lastName.isEmpty) return;
+    try {
+      await service.setName(firstName: firstName, lastName: lastName);
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save your name. Please try again.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -68,6 +105,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Profile', style: StubText.domine(fontSize: 18, color: ink)),
+              const SizedBox(height: 18),
+              StubPressable(
+                onTap: _editName,
+                child: StubCard(
+                  child: Row(
+                    children: [
+                      StubIcon(StubIcons.userCircle, size: 18, color: ink),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          service.firstName == null && service.lastName == null
+                              ? 'Add your name'
+                              : '${service.firstName ?? ''} ${service.lastName ?? ''}'.trim(),
+                          style: StubText.archivo(fontSize: 15, fontWeight: FontWeight.w600, color: ink),
+                        ),
+                      ),
+                      StubIcon(StubIcons.pencil, size: 16, color: ink50),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 18),
               StubCard(
                 child: Column(

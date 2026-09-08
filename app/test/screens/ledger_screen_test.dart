@@ -7,14 +7,12 @@ import 'package:stub/widgets/stub_bottom_nav.dart';
 import 'package:stub/widgets/stub_icon.dart';
 
 void main() {
-  testWidgets('LedgerScreen shows hero amount, categories, and recent transactions', (tester) async {
+  testWidgets('LedgerScreen shows category percentages and recent transactions', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: LedgerScreen(
           monthLabel: 'August',
-          leftToSpend: 1842.30,
-          leftToSpendFraction: 0.674,
-          categories: const [CategorySpend(name: 'Groceries', amount: 212.40, color: Colors.blue)],
+          categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue)],
           recent: [
             Transaction(id: 't1', categoryId: 'c1', merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, occurredAt: DateTime.now()),
           ],
@@ -27,21 +25,71 @@ void main() {
           onNavTap: (_) {},
           onScanTap: () {},
           onAddManualEntry: () {},
+          onRefresh: () async {},
         ),
       ),
     );
-    expect(find.textContaining('1,842.30'), findsOneWidget);
     expect(find.text('Groceries'), findsOneWidget);
+    expect(find.text('71%'), findsOneWidget);
     expect(find.text('Corner Market'), findsOneWidget);
+  });
+
+  testWidgets('A category with no budget shows "No budget set" instead of a percentage', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LedgerScreen(
+          monthLabel: 'August',
+          categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: null, color: Colors.blue)],
+          recent: const [],
+          activeNavIndex: 0,
+          navItems: const [
+            StubNavItem(icon: StubIcons.home, label: 'Home'),
+            StubNavItem(icon: StubIcons.chartBar, label: 'Budgets'),
+            StubNavItem(icon: StubIcons.userCircle, label: 'Profile'),
+          ],
+          onNavTap: (_) {},
+          onScanTap: () {},
+          onAddManualEntry: () {},
+          onRefresh: () async {},
+        ),
+      ),
+    );
+    expect(find.text('No budget set'), findsOneWidget);
+  });
+
+  testWidgets('Pulling down the ledger triggers onRefresh', (tester) async {
+    var refreshed = false;
+    await tester.pumpWidget(MaterialApp(home: LedgerScreen(
+      monthLabel: 'August',
+      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue)],
+      recent: [
+        Transaction(id: 't1', categoryId: 'c1', merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, occurredAt: DateTime.now()),
+      ],
+      activeNavIndex: 0,
+      navItems: const [
+        StubNavItem(icon: StubIcons.home, label: 'Home'),
+        StubNavItem(icon: StubIcons.chartBar, label: 'Budgets'),
+        StubNavItem(icon: StubIcons.userCircle, label: 'Profile'),
+      ],
+      onNavTap: (_) {},
+      onScanTap: () {},
+      onAddManualEntry: () {},
+      onRefresh: () async => refreshed = true,
+    )));
+
+    await tester.fling(find.byType(SingleChildScrollView), const Offset(0, 300), 1000);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(refreshed, isTrue);
   });
 
   testWidgets('LedgerScreen shows a manual-entry FAB that calls onAddManualEntry', (tester) async {
     var tapped = false;
     await tester.pumpWidget(MaterialApp(home: LedgerScreen(
       monthLabel: 'August',
-      leftToSpend: 1842.30,
-      leftToSpendFraction: 0.674,
-      categories: const [CategorySpend(name: 'Groceries', amount: 212.40, color: Colors.blue)],
+      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue)],
       recent: [
         Transaction(id: 't1', categoryId: 'c1', merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, occurredAt: DateTime.now()),
       ],
@@ -54,9 +102,33 @@ void main() {
       onNavTap: (_) {},
       onScanTap: () {},
       onAddManualEntry: () => tapped = true,
+      onRefresh: () async {},
     )));
 
     await tester.tap(find.byKey(const Key('ledger-add-manual-entry')));
     expect(tapped, isTrue);
+  });
+
+  testWidgets('Tapping a category row calls onCategoryTap with its categoryId', (tester) async {
+    String? tappedId;
+    await tester.pumpWidget(MaterialApp(home: LedgerScreen(
+      monthLabel: 'August',
+      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue)],
+      recent: const [],
+      activeNavIndex: 0,
+      navItems: const [
+        StubNavItem(icon: StubIcons.home, label: 'Home'),
+        StubNavItem(icon: StubIcons.chartBar, label: 'Budgets'),
+        StubNavItem(icon: StubIcons.userCircle, label: 'Profile'),
+      ],
+      onNavTap: (_) {},
+      onScanTap: () {},
+      onAddManualEntry: () {},
+      onRefresh: () async {},
+      onCategoryTap: (spend) => tappedId = spend.categoryId,
+    )));
+
+    await tester.tap(find.text('Groceries'));
+    expect(tappedId, 'c1');
   });
 }
