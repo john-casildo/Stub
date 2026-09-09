@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'data/account_link_service.dart';
+import 'data/app_links_deep_link_service.dart';
 import 'data/budget_repository.dart';
 import 'data/category_repository.dart';
 import 'data/deep_link_service.dart';
@@ -27,16 +28,6 @@ import 'util/currency.dart';
 import 'util/deep_link.dart';
 import 'widgets/stub_button.dart';
 import 'widgets/stub_loading_indicator.dart';
-
-/// Temporary — replaced by `AppLinksDeepLinkService` in the next task, once
-/// the `app_links` package is added. Keeps this task's own tests green
-/// without pulling in a new dependency here.
-class _PlaceholderDeepLinkService implements DeepLinkService {
-  @override
-  Future<Uri?> getInitialLink() async => null;
-  @override
-  Stream<Uri> get onLink => const Stream.empty();
-}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -124,7 +115,7 @@ class _StartupGateState extends State<_StartupGate> {
           currencyNotifier: result.currencyNotifier,
           textRecognitionService: MlKitTextRecognitionService(),
           deviceAuthService: LocalAuthDeviceAuthService(),
-          deepLinkService: _PlaceholderDeepLinkService(),
+          deepLinkService: AppLinksDeepLinkService(),
         );
       },
     );
