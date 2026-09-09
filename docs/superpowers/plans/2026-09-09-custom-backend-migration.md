@@ -94,8 +94,11 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/test/**/*.test.ts'],
   testTimeout: 15000,
+  setupFiles: ['dotenv/config'],
 };
 ```
+
+**Why `setupFiles: ['dotenv/config']` matters:** every test task from Task 2 onward runs `npx jest test/<file>.test.ts` directly, with no explicit env-var export in that command. Without this line, `DATABASE_URL`/`APP_DATABASE_URL`/`JWT_SECRET` would be unset inside the Jest process even after `.env` exists on disk (Task 2 Step 2 creates it), because nothing else loads it before `src/db.ts`/`src/auth.ts` read `process.env.*` at module import time. This line makes Jest load `.env` the same way `src/index.ts`'s `import 'dotenv/config'` does for the real server process.
 
 - [ ] **Step 5: Write `.env.example` and `.gitignore`**
 
