@@ -3,14 +3,21 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:workmanager/workmanager.dart';
+import 'config/backend_config.dart';
 import 'config/supabase_config.dart';
 import 'data/account_link_service.dart';
+import 'data/api_client.dart';
 import 'data/app_links_deep_link_service.dart';
 import 'data/budget_repository.dart';
 import 'data/category_repository.dart';
 import 'data/deep_link_service.dart';
 import 'data/device_auth_service.dart';
+import 'data/http_account_link_service.dart';
+import 'data/http_budget_repository.dart';
+import 'data/http_category_repository.dart';
+import 'data/http_transaction_repository.dart';
 import 'data/local_auth_device_auth_service.dart';
+import 'data/local_auth_token_store.dart';
 import 'data/local_notifications_service.dart';
 import 'data/local_prefs.dart';
 import 'data/mlkit_text_recognition_service.dart';
@@ -55,11 +62,13 @@ class _StartupResult {
 /// already initialized), so the whole bootstrap sequence can be retried
 /// as one unit on failure.
 Future<_StartupResult> _startup() async {
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    publishableKey: SupabaseConfig.publishableKey,
-  );
-  await _ensureSession();
+  if (BackendConfig.mode == BackendMode.supabase) {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      publishableKey: SupabaseConfig.publishableKey,
+    );
+    await _ensureSession();
+  }
   final localPrefs = LocalPrefs();
   final themeModeNotifier = ValueNotifier<ThemeMode>(await localPrefs.themeMode());
   final currencyCode = await localPrefs.currencyCode();
@@ -136,11 +145,21 @@ class _StartupGateState extends State<_StartupGate> {
           return _StartupScaffold(child: _StartupError(onRetry: _retry));
         }
         final result = snapshot.data!;
+        final apiClient = ApiClient(baseUrl: BackendConfig.baseUrl, tokenStore: LocalAuthTokenStore());
+        final useCustomServer = BackendConfig.mode == BackendMode.customServer;
         return StubApp(
-          categoryRepository: SupabaseCategoryRepository(Supabase.instance.client),
-          transactionRepository: SupabaseTransactionRepository(Supabase.instance.client),
-          budgetRepository: SupabaseBudgetRepository(Supabase.instance.client),
-          accountLinkService: SupabaseAccountLinkService(Supabase.instance.client),
+          categoryRepository: useCustomServer
+              ? HttpCategoryRepository(apiClient)
+              : SupabaseCategoryRepository(Supabase.instance.client),
+          transactionRepository: useCustomServer
+              ? HttpTransactionRepository(apiClient)
+              : SupabaseTransactionRepository(Supabase.instance.client),
+          budgetRepository: useCustomServer
+              ? HttpBudgetRepository(apiClient)
+              : SupabaseBudgetRepository(Supabase.instance.client),
+          accountLinkService: useCustomServer
+              ? HttpAccountLinkService(apiClient)
+              : SupabaseAccountLinkService(Supabase.instance.client),
           localPrefs: result.localPrefs,
           themeModeNotifier: result.themeModeNotifier,
           currencyNotifier: result.currencyNotifier,
