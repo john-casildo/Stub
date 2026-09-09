@@ -9,6 +9,12 @@ accountRouter.get('/', requireAuth, async (req: AuthedRequest, res) => {
     'select email, first_name, last_name, created_at from users where id = $1',
     [req.userId],
   );
+  if (result.rows.length === 0) {
+    // The JWT is well-formed but its `sub` has no matching row (orphaned or
+    // manually deleted user). Without this guard `row.email` throws and the
+    // generic 500 handler swallows it into an undiagnosable failure.
+    return res.status(404).json({ error: { code: 'user_not_found', message: 'User not found' } });
+  }
   const row = result.rows[0];
   res.json({
     isAnonymous: row.email === null,

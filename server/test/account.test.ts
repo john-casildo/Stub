@@ -1,4 +1,5 @@
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import { Pool } from 'pg';
 import { createApp } from '../src/app';
 
@@ -29,6 +30,15 @@ describe('GET /account', () => {
     expect(res.body.isAnonymous).toBe(true);
     expect(res.body.linkedEmail).toBeNull();
     expect(res.body.firstName).toBeNull();
+  });
+
+  it('returns 404 when the token references a user row that does not exist', async () => {
+    // Same shape/secret as `src/auth.ts`'s signToken, but for a userId with
+    // no matching row — an orphaned or manually-deleted user.
+    const token = jwt.sign({ sub: '00000000-0000-0000-0000-000000000000' }, process.env.JWT_SECRET!);
+    const res = await request(app).get('/account').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('user_not_found');
   });
 });
 
