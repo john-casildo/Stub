@@ -90,4 +90,28 @@ void main() {
     await tester.tap(find.text('Settings'));
     expect(opened, isTrue);
   });
+
+  testWidgets('Rebuilds when the account-link service reports a status change', (tester) async {
+    // `HttpAccountLinkService` fills its getters in from an async `/account`
+    // fetch and then emits on `linkStatusChanges` — so the screen has to
+    // rebuild on that event rather than trusting its first synchronous read.
+    final service = FakeAccountLinkService();
+    await tester.pumpWidget(MaterialApp(home: ProfileScreen(
+      accountLinkService: service,
+      totalEverTracked: 0,
+      categoryCount: 0,
+      activeNavIndex: 2,
+      navItems: _navItems,
+      onNavTap: (_) {},
+      onScanTap: () {},
+      onOpenSettings: () {},
+    )));
+
+    expect(find.textContaining('later@example.com'), findsNothing);
+
+    await service.linkEmail('later@example.com'); // emits on linkStatusChanges
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('later@example.com'), findsOneWidget);
+  });
 }

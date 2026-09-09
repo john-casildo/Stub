@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../data/account_link_service.dart';
 import '../theme/colors.dart';
@@ -44,6 +46,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const _months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
+
+  StreamSubscription<bool>? _linkStatusSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // The status getters below are read synchronously in `build()`. Under
+    // Supabase they're backed by an already-cached session, but
+    // `HttpAccountLinkService` fills them in from an async `/account` fetch
+    // — without this subscription the screen would show "Member since —" /
+    // "Add your name" until some unrelated rebuild happened to come along.
+    _linkStatusSub = widget.accountLinkService.linkStatusChanges.listen((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _linkStatusSub?.cancel();
+    super.dispose();
+  }
 
   String _memberSinceLabel() {
     final date = widget.accountLinkService.memberSince;
