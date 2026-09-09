@@ -6,6 +6,7 @@ import 'package:shared_preferences_platform_interface/shared_preferences_platfor
 import 'package:stub/data/fakes.dart';
 import 'package:stub/data/local_prefs.dart';
 import 'package:stub/main.dart';
+import 'package:stub/screens/manual_entry_screen.dart';
 
 /// A [SharedPreferencesStorePlatform] whose reads/writes always throw, used
 /// to force a real failure through [LocalPrefs] (which wraps the real
@@ -44,6 +45,7 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       textRecognitionService: FakeTextRecognitionService(),
       deviceAuthService: FakeDeviceAuthService(),
+      deepLinkService: FakeDeepLinkService(),
     ));
     await tester.pump();
 
@@ -66,6 +68,7 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       textRecognitionService: FakeTextRecognitionService(),
       deviceAuthService: FakeDeviceAuthService(),
+      deepLinkService: FakeDeepLinkService(),
     ));
     await tester.pump();
 
@@ -99,6 +102,7 @@ void main() {
         currencyNotifier: ValueNotifier<String>("USD"),
         textRecognitionService: FakeTextRecognitionService(),
         deviceAuthService: FakeDeviceAuthService(),
+        deepLinkService: FakeDeepLinkService(),
       ));
       await tester.pump();
 
@@ -126,6 +130,7 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       textRecognitionService: FakeTextRecognitionService(),
       deviceAuthService: FakeDeviceAuthService(),
+      deepLinkService: FakeDeepLinkService(),
     ));
 
     expect(
@@ -140,5 +145,40 @@ void main() {
       tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode,
       ThemeMode.light,
     );
+  });
+
+  testWidgets('A pending deep link opens ManualEntryScreen pre-filled once unlocked', (tester) async {
+    SharedPreferences.setMockInitialValues({'has_seen_backup_prompt': true});
+    final deepLinks = FakeDeepLinkService(
+      initialLink: Uri.parse('com.stubapp.stub://log-expense?amount=12.50&merchant=Starbucks'),
+    );
+    final categories = FakeCategoryRepository();
+    await categories.create('Groceries');
+
+    await tester.pumpWidget(StubApp(
+      categoryRepository: categories,
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      localPrefs: LocalPrefs(),
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      textRecognitionService: FakeTextRecognitionService(),
+      deviceAuthService: FakeDeviceAuthService(),
+      deepLinkService: deepLinks,
+    ));
+    await tester.pump();
+
+    // Still locked — the link must wait, not open ManualEntryScreen
+    // behind/through the lock screen.
+    expect(find.text('Stub is locked'), findsOneWidget);
+    expect(find.byType(ManualEntryScreen), findsNothing);
+
+    await tester.tap(find.text('Unlock'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ManualEntryScreen), findsOneWidget);
+    expect(find.text('12.50'), findsOneWidget);
+    expect(find.text('Starbucks'), findsOneWidget);
   });
 }

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'data/account_link_service.dart';
 import 'data/budget_repository.dart';
 import 'data/category_repository.dart';
+import 'data/deep_link_service.dart';
 import 'data/device_auth_service.dart';
 import 'data/local_auth_device_auth_service.dart';
 import 'data/local_prefs.dart';
@@ -21,8 +24,19 @@ import 'theme/app_theme.dart';
 import 'theme/colors.dart';
 import 'theme/text.dart';
 import 'util/currency.dart';
+import 'util/deep_link.dart';
 import 'widgets/stub_button.dart';
 import 'widgets/stub_loading_indicator.dart';
+
+/// Temporary — replaced by `AppLinksDeepLinkService` in the next task, once
+/// the `app_links` package is added. Keeps this task's own tests green
+/// without pulling in a new dependency here.
+class _PlaceholderDeepLinkService implements DeepLinkService {
+  @override
+  Future<Uri?> getInitialLink() async => null;
+  @override
+  Stream<Uri> get onLink => const Stream.empty();
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -110,6 +124,7 @@ class _StartupGateState extends State<_StartupGate> {
           currencyNotifier: result.currencyNotifier,
           textRecognitionService: MlKitTextRecognitionService(),
           deviceAuthService: LocalAuthDeviceAuthService(),
+          deepLinkService: _PlaceholderDeepLinkService(),
         );
       },
     );
@@ -202,6 +217,7 @@ class StubApp extends StatefulWidget {
     required this.currencyNotifier,
     required this.textRecognitionService,
     required this.deviceAuthService,
+    required this.deepLinkService,
   });
 
   final CategoryRepository categoryRepository;
@@ -213,6 +229,7 @@ class StubApp extends StatefulWidget {
   final ValueNotifier<String> currencyNotifier;
   final TextRecognitionService textRecognitionService;
   final DeviceAuthService deviceAuthService;
+  final DeepLinkService deepLinkService;
 
   @override
   State<StubApp> createState() => _StubAppState();
@@ -226,6 +243,9 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
   // null: still checking the flag right after unlock; true: show the
   // one-time prompt; false: skip it (already seen, or just dismissed).
   bool? _showBackupPrompt;
+  double? _pendingManualEntryAmount;
+  String? _pendingManualEntryMerchant;
+  StreamSubscription<Uri>? _deepLinkSubscription;
 
   @override
   void initState() {
@@ -233,13 +253,39 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     widget.currencyNotifier.addListener(_syncCurrencyConfig);
     _checkSupport();
+    _listenForDeepLinks();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.currencyNotifier.removeListener(_syncCurrencyConfig);
+    _deepLinkSubscription?.cancel();
     super.dispose();
+  }
+
+  /// A failure here (permission issue, platform channel error) must never
+  /// block startup — this is purely a nice-to-have on top of the app's
+  /// normal launch.
+  Future<void> _listenForDeepLinks() async {
+    try {
+      final initial = await widget.deepLinkService.getInitialLink();
+      if (initial != null) _handleIncomingLink(initial);
+    } catch (_) {}
+    _deepLinkSubscription = widget.deepLinkService.onLink.listen(
+      _handleIncomingLink,
+      onError: (_) {},
+    );
+  }
+
+  void _handleIncomingLink(Uri uri) {
+    final parsed = parseDeepLink(uri);
+    if (parsed == null) return;
+    if (!mounted) return;
+    setState(() {
+      _pendingManualEntryAmount = parsed.amount;
+      _pendingManualEntryMerchant = parsed.merchant;
+    });
   }
 
   void _syncCurrencyConfig() {
@@ -307,6 +353,21 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
         onDone: () => setState(() => _showBackupPrompt = false),
       );
     }
+    // Deliberately NOT cleared here via a postFrameCallback: RootShell's
+    // own `_dataFuture` (categories/transactions/budgets) can take a few
+    // more frames to resolve after RootShell first mounts (real Supabase
+    // calls are much slower than a single frame), and RootShell only
+    // reads `initialManualEntryAmount`/`initialManualEntryMerchant` once
+    // that future completes. Clearing this state after just one frame
+    // (confirmed as a real race via a failing test) would zero it out
+    // before RootShell ever gets a chance to consume it. RootShell has
+    // its own one-shot guard (`_consumedPendingManualEntry`) that already
+    // makes sure the same pending link only opens `ManualEntryScreen`
+    // once, no matter how many times this getter keeps handing it the
+    // same still-non-null values on later rebuilds — so nothing further
+    // needs to be done here.
+    final pendingAmount = _pendingManualEntryAmount;
+    final pendingMerchant = _pendingManualEntryMerchant;
     return RootShell(
       categoryRepository: widget.categoryRepository,
       transactionRepository: widget.transactionRepository,
@@ -316,6 +377,8 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
       currencyNotifier: widget.currencyNotifier,
       localPrefs: widget.localPrefs,
       textRecognitionService: widget.textRecognitionService,
+      initialManualEntryAmount: pendingAmount,
+      initialManualEntryMerchant: pendingMerchant,
     );
   }
 
