@@ -20,7 +20,7 @@ class HttpBudgetRepository implements BudgetRepository {
     required DateTime periodStart,
     DateTime? periodEnd,
   }) {
-    return _client.post('/budgets', {
+    return _client.postVoid('/budgets', {
       'categoryId': categoryId,
       'limitAmount': limitAmount,
       'periodType': periodType.wireValue,

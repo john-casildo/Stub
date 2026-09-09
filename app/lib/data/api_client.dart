@@ -108,6 +108,7 @@ class ApiClient {
   Future<Map<String, dynamic>> getMap(String path) async => (await _send('GET', path)) as Map<String, dynamic>;
   Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async =>
       (await _send('POST', path, body: body)) as Map<String, dynamic>;
+  Future<void> postVoid(String path, Map<String, dynamic> body) => _send('POST', path, body: body);
   Future<void> patch(String path, Map<String, dynamic> body) => _send('PATCH', path, body: body);
   Future<void> delete(String path) => _send('DELETE', path);
 }
