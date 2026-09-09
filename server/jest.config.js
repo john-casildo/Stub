@@ -4,4 +4,5 @@ module.exports = {
   testMatch: ['**/test/**/*.test.ts'],
   testTimeout: 15000,
   setupFiles: ['dotenv/config'],
+  maxWorkers: 1,
 };
