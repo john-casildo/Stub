@@ -74,4 +74,16 @@ describe('categories', () => {
     expect(deleteRes.status).toBe(409);
     expect(deleteRes.body.error.code).toBe('foreign_key_violation');
   });
+
+  it('returns 409 when creating a second category with the same name', async () => {
+    const token = await anonymousToken();
+    await request(app).post('/categories').set('Authorization', `Bearer ${token}`).send({ name: 'Groceries' });
+
+    const res = await request(app)
+      .post('/categories')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'Groceries' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('duplicate_name');
+  });
 });

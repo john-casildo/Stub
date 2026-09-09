@@ -18,16 +18,28 @@ categoriesRouter.post('/', requireAuth, async (req: AuthedRequest, res) => {
     icon?: string;
     colorIndex?: number | null;
   };
-  const row = await withUserContext(req.userId!, (client) =>
-    client
-      .query(
-        `insert into categories (user_id, name, currency_code, icon, color_index)
-         values ($1, $2, $3, $4, $5) returning *`,
-        [req.userId, name, currencyCode ?? null, icon ?? 'tag', colorIndex ?? null],
-      )
-      .then((r) => r.rows[0]),
-  );
-  res.status(201).json(row);
+  try {
+    const row = await withUserContext(req.userId!, (client) =>
+      client
+        .query(
+          `insert into categories (user_id, name, currency_code, icon, color_index)
+           values ($1, $2, $3, $4, $5) returning *`,
+          [req.userId, name, currencyCode ?? null, icon ?? 'tag', colorIndex ?? null],
+        )
+        .then((r) => r.rows[0]),
+    );
+    res.status(201).json(row);
+  } catch (err: any) {
+    // `unique (user_id, name)` — matches the Supabase path's `23505` handling
+    // in `root_shell.dart`'s `_friendlyMessage`, so the same everyday mistake
+    // reads the same on both backends.
+    if (err.code === '23505') {
+      return res.status(409).json({
+        error: { code: 'duplicate_name', message: 'A category with that name already exists' },
+      });
+    }
+    throw err;
+  }
 });
 
 categoriesRouter.delete('/:id', requireAuth, async (req: AuthedRequest, res) => {

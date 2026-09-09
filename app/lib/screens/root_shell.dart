@@ -542,6 +542,7 @@ class _RootShellState extends State<RootShell> {
 
   String _friendlyMessageForApiException(ApiException e) => switch (e.code) {
         'foreign_key_violation' => "Can't delete a category with existing transactions.",
+        'duplicate_name' => 'A category with that name already exists.',
         'email_taken' => 'That email is already linked to an account.',
         _ => 'Something went wrong. Please try again.',
       };
