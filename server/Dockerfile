@@ -4,4 +4,4 @@ COPY package*.json ./
 RUN npm install
 COPY . .
 RUN npm run build
-CMD ["sh", "-c", "npm run migrate && node dist/index.js"]
+CMD ["sh", "-c", "npm run migrate up && node dist/index.js"]
