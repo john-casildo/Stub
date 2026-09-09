@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/account_link_service.dart';
+import '../data/api_client.dart';
 import '../data/budget_repository.dart';
 import '../data/category_repository.dart';
 import '../data/local_prefs.dart';
@@ -452,6 +453,12 @@ class _RootShellState extends State<RootShell> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyMessage(e))));
       }
+    } on ApiException catch (e) {
+      if (mounted) Navigator.of(context).pop(); // dismiss the loading dialog
+      if (mounted) _reload();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyMessageForApiException(e))));
+      }
     } catch (_) {
       if (mounted) Navigator.of(context).pop(); // dismiss the loading dialog
       if (mounted) _reload();
@@ -513,6 +520,10 @@ class _RootShellState extends State<RootShell> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyMessage(e))));
       }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyMessageForApiException(e))));
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -526,6 +537,12 @@ class _RootShellState extends State<RootShell> {
         '23503' => "Can't delete a category with existing transactions.",
         '23505' => 'A category with that name already exists.',
         '23514' => 'Please check the values you entered.',
+        _ => 'Something went wrong. Please try again.',
+      };
+
+  String _friendlyMessageForApiException(ApiException e) => switch (e.code) {
+        'foreign_key_violation' => "Can't delete a category with existing transactions.",
+        'email_taken' => 'That email is already linked to an account.',
         _ => 'Something went wrong. Please try again.',
       };
 
@@ -565,6 +582,10 @@ class _RootShellState extends State<RootShell> {
     } on PostgrestException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyMessage(e))));
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_friendlyMessageForApiException(e))));
       }
     }
   }
