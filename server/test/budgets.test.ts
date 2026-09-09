@@ -55,4 +55,32 @@ describe('budgets', () => {
     const listAfter = await request(app).get('/budgets').set('Authorization', `Bearer ${token}`);
     expect(Number(listAfter.body[0].spent)).toBe(40);
   });
+
+  it("rejects creating a budget against another user's category", async () => {
+    const { categoryId } = await setup();
+    const tokenB = (await request(app).post('/auth/anonymous')).body.token as string;
+
+    const res = await request(app)
+      .post('/budgets')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ categoryId, limitAmount: 500, periodType: 'monthly', periodStart: '2026-09-01' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('category_not_found');
+  });
+
+  it("does not show one user's budgets to another user through budget_progress", async () => {
+    // `budget_progress` is a `security_invoker` view — a different RLS
+    // mechanism than a plain table policy, so it's worth proving separately.
+    const { token, categoryId } = await setup();
+    await request(app)
+      .post('/budgets')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ categoryId, limitAmount: 500, periodType: 'monthly', periodStart: '2026-09-01' });
+
+    const tokenB = (await request(app).post('/auth/anonymous')).body.token as string;
+    const listRes = await request(app).get('/budgets').set('Authorization', `Bearer ${tokenB}`);
+    expect(listRes.status).toBe(200);
+    expect(listRes.body).toHaveLength(0);
+  });
 });
