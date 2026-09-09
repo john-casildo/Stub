@@ -111,6 +111,12 @@ it.
 | `app/supabase/migrations/20260908144808_category_currency.sql` | Adds nullable `categories.currency_code` (checked at the DB level against the same code list as `lib/util/currency.dart`'s `supportedCurrencies` — keep both in sync by hand if either changes; **not yet pushed to the remote project** — blocked on `supabase login` re-auth, see Open items) and updates `budget_progress` to also select it |
 | `app/supabase/migrations/20260908183000_category_icon_color.sql` | Adds `categories.icon` (`not null default 'tag'`, checked against the same key list as `lib/theme/category_icons.dart`'s `categoryIconKeys` — keep both in sync by hand) and nullable `categories.color_index` (checked `0-5`, matching `category_colors.dart`'s 6-slot palette); updates `budget_progress` to also select both. **Not yet pushed to the remote project** — same `supabase login` re-auth blocker as the currency migration above, see Open items |
 | `app/l10n.yaml` | `flutter gen-l10n` config (`arb-dir: lib/l10n`, `template-arb-file: app_en.arb`) — scaffolding only for the still-unstarted English/Spanish localization; no ARB files exist yet |
+| `app/lib/config/backend_config.dart` | `BackendMode` (`supabase`/`customServer`) + `BackendConfig.mode`/`baseUrl` — the single switch point between the two coexisting backends; `main.dart` branches on `mode` to construct either the `Supabase*` or the `Http*` set of repositories/services. Currently defaults to `customServer`. `baseUrl` is `http://localhost:3000` — change it to the Mac's LAN IP (`ipconfig getifaddr en0`) when testing from a physical phone, which can't reach the Mac's `localhost` |
+| `server/` (repo root) | The self-hosted Node 20 + TypeScript + Postgres 16 backend — a **sibling alternative to Supabase, not a replacement**: every `Supabase*Repository`/`SupabaseAccountLinkService` stays in the tree untouched for a future switch back (see `docs/superpowers/specs/2026-09-09-custom-backend-migration-design.md`). Express 5 + raw parameterized `pg` SQL (no ORM), JWT auth (`jsonwebtoken`, 365d tokens), and the same Postgres RLS defense-in-depth Supabase gave us — `src/db.ts`'s `withUserContext(userId, fn)` opens a transaction and `set_config('app.current_user_id', ...)`s it before the query, which every table policy keys on. `src/routes/{auth,account,categories,transactions,budgets}.ts` is one thin router per resource; `migrations/1757000000000_init.js` (run via `node-pg-migrate up`) ports all three Supabase migrations plus the `budget_progress` `security_invoker` view near-verbatim, so `GET /budgets` returns the same shape the app already consumes. Every error is `{ error: { code, message } }` (`app.ts`'s catch-all is `internal_error`/500 with no stack or SQL leaked). Both `POST /transactions` and `POST /budgets` insert via `insert ... select from categories where id = $2` rather than `values` — an application-level ownership check, because Postgres's FK constraint runs with elevated privileges and **bypasses RLS**, so without it user B could reference user A's `categoryId` and permanently block A from deleting (`on delete restrict`) or budgeting (`unique (category_id)`) their own category. Run it with `cd server && docker compose up -d --build` |
+| `server/test/*.test.ts` | Jest + `supertest` integration tests against a **real** Postgres (the `server-postgres-1` container) — genuinely new coverage this project never had for Supabase (see the Testing approach note below). One file per resource plus `db.test.ts` (the RLS helper itself) and `error_handling.test.ts` (the shared 500 handler's body shape). `jest.config.js` sets `maxWorkers: 1` deliberately: every file's `beforeEach` truncates the shared tables, so parallel files would race each other's cleanup |
+| `app/lib/data/api_client.dart` | `ApiClient` + `ApiException` (carries the server's `error.code`, so callers branch the same way they already do on `PostgrestException.code`) — the shared HTTP layer under every `Http*` class. Owns the session lifecycle: `_ensureToken()` reads the stored JWT or `POST`s `/auth/anonymous`, **memoizing the in-flight sign-in in `_tokenFuture`** so two callers racing at cold start (`HttpAccountLinkService`'s constructor vs. `RootShell._load()`) share one sign-in instead of creating two `users` rows and silently orphaning one (a real, confirmed bug, caught by the whole-branch review). `_tokenFuture` is cleared in a `finally` — on failure too, so a failed sign-in can't wedge every later caller onto a dead future. `_send` retries the entire request **exactly once** on a `401` (delete the token, re-run `_ensureToken`, re-issue), recovering from an expired/orphaned JWT that previously left the app permanently stuck until app data was manually cleared; a second 401 falls through to the throw, so it can't loop |
+| `app/lib/data/local_auth_token_store.dart` | `LocalAuthTokenStore` — `SharedPreferences`-backed `readToken`/`writeToken`/`deleteToken` for the custom backend's JWT, the role Supabase's own session persistence plays today. `deleteToken` exists for `ApiClient`'s 401 recovery above (see Open items — a JWT is more sensitive than `LocalPrefs`' UI-only values, so `flutter_secure_storage` is worth revisiting) |
+| `app/lib/data/http_category_repository.dart`, `http_transaction_repository.dart`, `http_budget_repository.dart`, `http_account_link_service.dart` | The `Http*` implementations of the same four interfaces the `Supabase*` classes implement — thin mappers over `ApiClient`, no logic of their own beyond row shaping. `HttpAccountLinkService` differs from its Supabase sibling in one way that matters: its getters are filled in by an async `/account` fetch kicked off in its constructor, not from an already-cached session, so it emits on `linkStatusChanges` when that lands and `ProfileScreen` subscribes to rebuild (closing what was a long-standing "no subscriber" Open item) |
 | `ocr-spike/` (repo root) | The OCR accuracy spike — Swift scripts, sample images, raw results. Findings are already summarized in this file's "OCR/parsing spike" section below; only open the raw folder if you need something beyond that summary. |
 
 ---
@@ -166,13 +172,41 @@ Flutter SDK installed at `~/development/flutter`, on PATH via `~/.zshrc`.
 - `lib/screens/` — one file per screen, ported from `mockups.html` one at a
   time
 
-**Status**: theme + all reusable components (`StubButton`, `StubLogo`, `StubIcon`, `StubCard`, `StubChip`, `StubFieldRow`, `StubProgressRing`, `StubProgressBar`, `StubTransactionTile`, `StubBottomNav`/`StubNavItem`, `StubHeroAmount`, `StubPressable`, `StubPeriodPicker`, `StubProviderRow`, `StubAccountLinkPanel`) wired and verified (`flutter analyze` clean, 210 tests passing). All 7 real screens (Ledger, Scan, Edit Entry, Manual Entry, Budgets, Lock, Add Category) ported/added and wired via `RootShell` navigation shell, plus the one-time `BackupPromptScreen` and the Profile & Settings pair (`ProfileScreen`, `SettingsScreen`). `main.dart` now gates on `LockScreen`, which requires real device biometric/passcode auth via `DeviceAuthService`, then the one-time backup prompt, before showing the real app — and re-locks immediately whenever the app backgrounds.
+**Status**: theme + all reusable components (`StubButton`, `StubLogo`, `StubIcon`, `StubCard`, `StubChip`, `StubFieldRow`, `StubProgressRing`, `StubProgressBar`, `StubTransactionTile`, `StubBottomNav`/`StubNavItem`, `StubHeroAmount`, `StubPressable`, `StubPeriodPicker`, `StubProviderRow`, `StubAccountLinkPanel`) wired and verified (`flutter analyze` clean, 211 tests passing; plus 20 server-side Jest integration tests, see `server/test/`). All 7 real screens (Ledger, Scan, Edit Entry, Manual Entry, Budgets, Lock, Add Category) ported/added and wired via `RootShell` navigation shell, plus the one-time `BackupPromptScreen` and the Profile & Settings pair (`ProfileScreen`, `SettingsScreen`). `main.dart` now gates on `LockScreen`, which requires real device biometric/passcode auth via `DeviceAuthService`, then the one-time backup prompt, before showing the real app — and re-locks immediately whenever the app backgrounds.
 
 The app now reads and writes **real data** through Supabase, not sample data: `main.dart` calls `Supabase.initialize()` then `_ensureSession()` (silently `signInAnonymously()`s if there's no existing session — anonymous auth is enabled and verified working against the real remote project, see the Supabase section below), then constructs the three real `Supabase*Repository` implementations plus `SupabaseAccountLinkService` and `LocalPrefs`, and threads them down through `StubApp` → `_LockGate` → `RootShell`. `RootShell` loads categories/transactions/budgets on init, reloads after every write, and wires Ledger's manual-entry FAB, Edit Entry's save/delete, and a new Add Category screen (name + limit + period, via `StubPeriodPicker`) all the way through to Postgres. Tab 2 "Profile" now shows the real `ProfileScreen` (it no longer falls back to Ledger content): anonymous/linked status, `StubAccountLinkPanel` reused for the Email link flow, lifetime stats, and a `Settings` row that opens `SettingsScreen` (live theme switching persisted via `LocalPrefs` + a `ValueNotifier<ThemeMode>` read at startup in `main.dart`, two notification toggles that are UI-only so far, CSV export via `share_plus`, and delete-all-data behind a confirmation dialog, both wired through `RootShell`). Linking a persistent identity (Phase 2) is implemented for Email: `_LockGate` shows `BackupPromptScreen` once per device (tracked via `LocalPrefs`) after first unlock, offering Email (functional, via `AccountLinkService.linkEmail`), Apple/Google/Phone (visibly disabled, "Coming soon"); the same panel and the same Email flow are reachable again later from `ProfileScreen` for anyone who skipped the prompt. `ScanScreen` now performs a real capture (camera or photo library via `image_picker`) and a real on-device OCR pass (`TextRecognitionService` — `MlKitTextRecognitionService` in production, backed by Google ML Kit) followed by position-based parsing (`parseReceiptLines`, see `receipt_parser.dart`'s entry above); its result flows through `RootShell._handleScanned`/`_openScanCreateFlow` into `EditEntryScreen(isCreating: true, ...)`, pre-filled with the parsed merchant/amount for mandatory human review, and on save creates a real transaction via `TransactionRepository.create` — no longer a hardcoded no-op stub.
 
 Real app icon generated and installed for both iOS and Android via `tool/generate_icon_test.dart` (renders `StubLogo`'s exact geometry to `assets/icon/icon.png`) + `flutter_launcher_icons`. iOS build confirmed working end to end (`flutter build ios --debug --no-codesign` succeeds).
 
-**Testing approach**: all 210 tests are pure-Dart widget/unit tests run via `flutter test` against the in-memory fakes in `lib/data/fakes.dart` (or, for models/utils, no backend at all) — there is no integration test suite that hits the real Supabase project. The `Supabase*Repository`/`SupabaseAccountLinkService` implementations (`lib/data/supabase_*.dart`) are exercised only by manual/CLI verification during implementation (recorded in the task reports under `.superpowers/sdd/2026-08-26-real-data-foundation/`, `.superpowers/sdd/2026-08-27-account-linking-phase2/`, `.superpowers/sdd/2026-08-27-profile-and-settings/`, and `.superpowers/sdd/2026-09-06-receipt-scanner/`), not by an automated test run against the live database. `csv_export.dart`'s real half (`exportTransactionsCsv`'s temp-file write + OS share sheet) is likewise unverified by an automated test — only its pure CSV-building logic (`buildTransactionsCsv`) is unit-tested; see Open items. `MlKitTextRecognitionService` is the same story: `receipt_parser.dart`'s pure parsing logic is unit-tested, but the real ML Kit call has no automated test — it needs a physical device (see Open items and the iOS setup notes below). `LocalAuthDeviceAuthService` is the same story again: `LockScreen`/`_LockGateState`'s logic is unit/widget-tested against `FakeDeviceAuthService`, but the real `local_auth` call has no automated test — see Open items. `LocalNotificationsService` is the same story once more: the threshold-crossing logic and `RootShell`'s wiring are fully tested against `FakeNotificationService`, but the real `flutter_local_notifications` call has no automated test — see Open items. One exception: `LocalPrefs` (a concrete class, not an interface) has its unlock-time failure path exercised for real by installing a throwing `SharedPreferencesStorePlatform` in `app/test/widget_test.dart`, rather than by a hand-rolled fake of `LocalPrefs` itself.
+**Testing approach**: all 211 Flutter tests are pure-Dart widget/unit tests run via `flutter test` against the in-memory fakes in `lib/data/fakes.dart` (or, for models/utils, no backend at all) — there is no integration test suite that hits the real Supabase project. The `Supabase*Repository`/`SupabaseAccountLinkService` implementations (`lib/data/supabase_*.dart`) are exercised only by manual/CLI verification during implementation (recorded in the task reports under `.superpowers/sdd/2026-08-26-real-data-foundation/`, `.superpowers/sdd/2026-08-27-account-linking-phase2/`, `.superpowers/sdd/2026-08-27-profile-and-settings/`, and `.superpowers/sdd/2026-09-06-receipt-scanner/`), not by an automated test run against the live database. `csv_export.dart`'s real half (`exportTransactionsCsv`'s temp-file write + OS share sheet) is likewise unverified by an automated test — only its pure CSV-building logic (`buildTransactionsCsv`) is unit-tested; see Open items. `MlKitTextRecognitionService` is the same story: `receipt_parser.dart`'s pure parsing logic is unit-tested, but the real ML Kit call has no automated test — it needs a physical device (see Open items and the iOS setup notes below). `LocalAuthDeviceAuthService` is the same story again: `LockScreen`/`_LockGateState`'s logic is unit/widget-tested against `FakeDeviceAuthService`, but the real `local_auth` call has no automated test — see Open items. `LocalNotificationsService` is the same story once more: the threshold-crossing logic and `RootShell`'s wiring are fully tested against `FakeNotificationService`, but the real `flutter_local_notifications` call has no automated test — see Open items. One exception: `LocalPrefs` (a concrete class, not an interface) has its unlock-time failure path exercised for real by installing a throwing `SharedPreferencesStorePlatform` in `app/test/widget_test.dart`, rather than by a hand-rolled fake of `LocalPrefs` itself.
+
+## Backend/database: two backends, one switch
+
+The app can run against **either** backend, and both stay in the tree:
+Supabase (documented in the section below, still fully working) and a
+self-hosted Node/TypeScript + Postgres server in `server/` (see its file-map
+rows above and
+`docs/superpowers/specs/2026-09-09-custom-backend-migration-design.md`).
+Nothing is duplicated at the call site — the `Supabase*` and `Http*` classes
+are sibling implementations of the same four interfaces
+(`CategoryRepository`, `TransactionRepository`, `BudgetRepository`,
+`AccountLinkService`), and `main.dart` picks a set based on
+`app/lib/config/backend_config.dart`'s `BackendConfig.mode`. That one
+constant **currently defaults to `BackendMode.customServer`**; flipping it
+back to `BackendMode.supabase` fully reverts the app, no other change
+needed. `RootShell` is the only screen that had to learn about both: it
+catches `PostgrestException` and `ApiException` side by side, with
+`_friendlyMessage`/`_friendlyMessageForApiException` mapping each backend's
+error codes to the same user-facing sentences (so e.g. a duplicate category
+name reads identically whether it arrived as Postgres `23505` or as the
+server's `duplicate_name`/409).
+
+To run the custom backend locally: `cd server && docker compose up -d
+--build` — that brings up `postgres` (port 5432, named volume) and `api`
+(port 3000, runs `npm run migrate up` then the server on boot). Confirm with
+`curl http://localhost:3000/health` → `{"status":"ok"}`. Tests:
+`cd server && npm test` (needs the `postgres` container up; runs against it
+for real, sequentially — see `jest.config.js`'s `maxWorkers: 1`).
 
 ## Backend/database: Supabase
 
@@ -282,6 +316,51 @@ hot-reload/JIT machinery that never ships to real users. Always measure
 
 ## Open items
 
+- **The weekly summary silently no-ops under `BackendMode.customServer`.**
+  `weekly_summary_scheduler.dart`'s `weeklySummaryCallbackDispatcher` runs in
+  a fresh background isolate with none of the app's state and re-initializes
+  **Supabase** from scratch to query the last 7 days — there's no injected
+  `ApiClient` out there, and no date-filtered server endpoint to call even if
+  there were. Real support needs one or the other; deliberately not built in
+  this pass. The toggle in `SettingsScreen` still registers/cancels the
+  `workmanager` task as before, it just won't produce a notification on the
+  custom backend.
+- **The custom backend's secrets are dev-only placeholders.** The `app_user`
+  Postgres role password (`app_user_password`, set in
+  `migrations/1757000000000_init.js` and repeated in `server/docker-compose.yml`
+  + `server/.env.example`) and `JWT_SECRET` (`dev-secret-change-me`) are both
+  hardcoded. Fine for `localhost` Docker Compose, which is all this is scoped
+  to today — but they must be parameterized and rotated before this reaches
+  any non-local host. Same note as the still-undecided production deployment
+  target (always-on host, TLS, domain).
+- **`server`'s `users` table has no RLS policy.** Every other table
+  (`categories`/`budgets`/`transactions`) has one, keyed on
+  `app.current_user_id`, as defense-in-depth behind the application code.
+  `users` doesn't, because the only two things that touch it need to work
+  outside that model: `POST /auth/anonymous` runs pre-auth (there's no user
+  id yet), and `/account`'s reads/writes are already scoped to the JWT's own
+  `req.userId`. So authorization there is application-code-only — the one
+  place in the schema without the second layer.
+- **Custom-backend edge-case gaps, all defense-in-depth rather than open
+  holes** (the primary mechanism — JWT-derived ownership plus RLS — already
+  holds in each case): `GET /transactions`' `?offset=`/`?limit=` query params
+  aren't validated or clamped; there's no test proving a forged or expired
+  JWT is rejected (`requireAuth` does verify signature and expiry); there's
+  no test proving a cross-user `PATCH`/`DELETE` on a transaction is a no-op
+  (RLS makes it one); and `server/` has no `.dockerignore`, so the image
+  build copies more than it needs before `npm install` overwrites
+  `node_modules`.
+- **`LocalAuthTokenStore` keeps the JWT in `SharedPreferences`, not secure
+  storage.** Chosen at implementation time for symmetry with `LocalPrefs`,
+  but a bearer token is materially more sensitive than the UI-only prefs that
+  class was built for — `flutter_secure_storage` is worth revisiting before
+  shipping.
+- **Nothing about the custom backend has been verified from a physical
+  device.** The server has real integration test coverage against a real
+  Postgres, and `flutter analyze`/`flutter test` are clean, but no phone has
+  actually talked to the Dockerized server over LAN (which also means
+  `BackendConfig.baseUrl` has never been exercised as anything but
+  `localhost`) — same story as every other "real backend" item in this list.
 - **`categories.currency_code`/`icon`/`color_index` migrations not yet
   pushed.** `supabase db push`/`supabase projects list` are currently
   returning `401 Unauthorized` — the CLI's auth token needs refreshing
@@ -355,13 +434,17 @@ hot-reload/JIT machinery that never ships to real users. Always measure
   production) is still what actually sends the email-link confirmation. A
   real SMTP provider needs to be configured there before this ships to real
   users.
-- **`AccountLinkService.linkStatusChanges` still has no subscriber.**
-  `ProfileScreen` exists now, but it reacts to a completed link via
-  `StubAccountLinkPanel`'s `onLinked` callback (a plain `setState(() {})`
-  after `linkEmail` succeeds), not by subscribing to this stream — so an
-  external event (e.g. the confirmation link being tapped while Profile is
-  already open) still wouldn't refresh the UI without polling. Not a bug on
-  the happy path already covered, just still unused.
+- ~~`AccountLinkService.linkStatusChanges` still has no subscriber~~ —
+  **resolved**: `_ProfileScreenState` now holds a `StreamSubscription<bool>`
+  on it (opened in `initState`, cancelled in `dispose`) that just calls an
+  empty `setState`, since the status getters are read straight off the
+  service. Driven by `HttpAccountLinkService`, whose getters only fill in
+  after an async `/account` fetch — without this the screen showed "Member
+  since —"/"Add your name" on first open and self-corrected only if some
+  unrelated rebuild happened along. It also closes the original gap this item
+  described: an external event (a confirmation link tapped while Profile is
+  open) now refreshes the UI instead of needing `StubAccountLinkPanel`'s
+  `onLinked` callback to have fired in-process.
 - **Weekly summary has not been verified on a real device — timing
   especially.** Registered via `workmanager` (`scheduleWeeklySummary`), with
   `weeklySummaryCallbackDispatcher` re-initializing Supabase and computing
@@ -437,13 +520,17 @@ hot-reload/JIT machinery that never ships to real users. Always measure
   parsing logic is unit-tested and `ScanScreen`'s UI flow is tested against
   `FakeTextRecognitionService`, nobody has pointed a real camera at a real
   receipt and confirmed a real transaction lands in Postgres.
-- **Testing gap**: all 210 tests are unit/widget tests against in-memory
+- **Testing gap (Supabase path only)**: all 211 Flutter tests are unit/widget tests against in-memory
   fakes (`lib/data/fakes.dart`); the `Supabase*Repository` implementations
   have no automated test coverage against a real or local Supabase instance
   — only manual/CLI verification during implementation. Worth adding
   integration coverage (e.g. against the local `supabase start` stack)
   before relying on RLS/schema behavior in production without a human
-  re-checking it.
+  re-checking it. The custom backend does **not** have this gap — `server/test/`
+  runs against a real Postgres and covers each route, RLS isolation both
+  directions, and the error paths; the equivalent gap there is that the
+  `Http*` Dart classes themselves have no tests (same convention as their
+  `Supabase*` siblings).
 
 ## Real-device ML Kit findings (2026-09-07, receipt scanner follow-up)
 
