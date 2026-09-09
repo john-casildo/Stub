@@ -14,6 +14,7 @@ import '../theme/category_colors.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../util/csv_export.dart';
+import '../util/deep_link.dart';
 import '../util/receipt_parser.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_button.dart';
@@ -57,8 +58,8 @@ class RootShell extends StatefulWidget {
     required this.currencyNotifier,
     required this.localPrefs,
     required this.textRecognitionService,
-    this.initialManualEntryAmount,
-    this.initialManualEntryMerchant,
+    this.initialManualEntryLink,
+    this.initialManualEntryToken,
   });
 
   final CategoryRepository categoryRepository;
@@ -69,14 +70,21 @@ class RootShell extends StatefulWidget {
   final ValueNotifier<String> currencyNotifier;
   final LocalPrefs localPrefs;
   final TextRecognitionService textRecognitionService;
-  /// Set once, by `StubApp`, when the app was opened via a
+  /// Set by `StubApp` when the app has ever received a
   /// `com.stubapp.stub://log-expense` Siri Shortcuts deep link (see
-  /// `util/deep_link.dart`). `StubApp` clears its own pending state
-  /// immediately after passing these along, so they're only ever
-  /// non-null on the one build where they should actually open
-  /// `ManualEntryScreen`.
-  final double? initialManualEntryAmount;
-  final String? initialManualEntryMerchant;
+  /// `util/deep_link.dart`) — `StubApp` deliberately never clears this
+  /// state (a previous version that cleared it via a postFrameCallback
+  /// had a real race against `RootShell`'s own async data load), so it
+  /// stays non-null across every later rebuild of this same `RootShell`
+  /// instance, not just the one build right after the link arrived.
+  /// [initialManualEntryToken] is what actually distinguishes "a new link
+  /// just arrived" from "the same already-consumed link is still sitting
+  /// in `StubApp`'s state after an unrelated rebuild" (tab switch,
+  /// pull-to-refresh): it's null when there's no pending link, and a
+  /// freshly incremented value each time `StubApp` accepts a new link —
+  /// see `_RootShellState._consumedManualEntryToken`.
+  final ParsedDeepLink? initialManualEntryLink;
+  final int? initialManualEntryToken;
 
   @override
   State<RootShell> createState() => _RootShellState();
@@ -92,10 +100,13 @@ class _RootShellState extends State<RootShell> {
   // it unmounts LedgerScreen/StubProgressRing entirely, made the progress
   // ring restart its fill animation from zero on every single write.
   _ShellData? _lastData;
-  // Guards against re-opening ManualEntryScreen if this widget rebuilds
-  // for an unrelated reason (tab switch, reload) after already consuming
-  // widget.initialManualEntryAmount/Merchant once.
-  bool _consumedPendingManualEntry = false;
+  // The `initialManualEntryToken` value already consumed to open
+  // ManualEntryScreen, or null if none has been consumed yet. Comparing
+  // against the token (not a plain bool) is what lets a genuinely new,
+  // different deep link re-open ManualEntryScreen later in the same app
+  // session, while a rebuild that hands back the same already-consumed
+  // token (tab switch, pull-to-refresh) still doesn't re-open it.
+  int? _consumedManualEntryToken;
 
   @override
   void initState() {
@@ -478,15 +489,16 @@ class _RootShellState extends State<RootShell> {
         // whole screen with a hard error — only the true first load (no
         // data at all yet) surfaces the retry screen above.
 
-        if (!_consumedPendingManualEntry &&
-            (widget.initialManualEntryAmount != null || widget.initialManualEntryMerchant != null)) {
-          _consumedPendingManualEntry = true;
+        if (widget.initialManualEntryToken != null &&
+            widget.initialManualEntryToken != _consumedManualEntryToken) {
+          _consumedManualEntryToken = widget.initialManualEntryToken;
+          final link = widget.initialManualEntryLink;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               _openManualEntry(
                 data.categories,
-                initialAmount: widget.initialManualEntryAmount,
-                initialMerchant: widget.initialManualEntryMerchant,
+                initialAmount: link?.amount,
+                initialMerchant: link?.merchant,
               );
             }
           });

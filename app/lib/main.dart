@@ -234,8 +234,16 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
   // null: still checking the flag right after unlock; true: show the
   // one-time prompt; false: skip it (already seen, or just dismissed).
   bool? _showBackupPrompt;
-  double? _pendingManualEntryAmount;
-  String? _pendingManualEntryMerchant;
+  // Non-null once a `log-expense` link has ever been accepted (even if its
+  // amount/merchant fields all parsed to null — see `parseDeepLink`'s doc
+  // comment). Paired with `_deepLinkSerial` below so RootShell can tell
+  // "no pending link" apart from "pending link with all-null contents"
+  // (Finding 2), and "a genuinely new link just arrived" apart from "the
+  // same already-consumed link is still sitting in state after an
+  // unrelated rebuild" (Finding 1) — a plain one-shot bool can't make that
+  // second distinction once it flips true forever.
+  ParsedDeepLink? _pendingLink;
+  int _deepLinkSerial = 0;
   StreamSubscription<Uri>? _deepLinkSubscription;
 
   @override
@@ -274,8 +282,8 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
     if (parsed == null) return;
     if (!mounted) return;
     setState(() {
-      _pendingManualEntryAmount = parsed.amount;
-      _pendingManualEntryMerchant = parsed.merchant;
+      _pendingLink = parsed;
+      _deepLinkSerial++;
     });
   }
 
@@ -348,17 +356,14 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
     // own `_dataFuture` (categories/transactions/budgets) can take a few
     // more frames to resolve after RootShell first mounts (real Supabase
     // calls are much slower than a single frame), and RootShell only
-    // reads `initialManualEntryAmount`/`initialManualEntryMerchant` once
-    // that future completes. Clearing this state after just one frame
-    // (confirmed as a real race via a failing test) would zero it out
-    // before RootShell ever gets a chance to consume it. RootShell has
-    // its own one-shot guard (`_consumedPendingManualEntry`) that already
-    // makes sure the same pending link only opens `ManualEntryScreen`
-    // once, no matter how many times this getter keeps handing it the
-    // same still-non-null values on later rebuilds — so nothing further
-    // needs to be done here.
-    final pendingAmount = _pendingManualEntryAmount;
-    final pendingMerchant = _pendingManualEntryMerchant;
+    // reads `initialManualEntryLink` once that future completes. Clearing
+    // this state after just one frame (confirmed as a real race via a
+    // failing test) would zero it out before RootShell ever gets a chance
+    // to consume it. Instead, `_deepLinkSerial` — passed through as
+    // `initialManualEntryToken` — lets RootShell tell a genuinely new link
+    // apart from the same still-pending one being handed to it again on an
+    // unrelated rebuild (tab switch, pull-to-refresh), without ever
+    // needing this state cleared.
     return RootShell(
       categoryRepository: widget.categoryRepository,
       transactionRepository: widget.transactionRepository,
@@ -368,8 +373,8 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
       currencyNotifier: widget.currencyNotifier,
       localPrefs: widget.localPrefs,
       textRecognitionService: widget.textRecognitionService,
-      initialManualEntryAmount: pendingAmount,
-      initialManualEntryMerchant: pendingMerchant,
+      initialManualEntryLink: _pendingLink,
+      initialManualEntryToken: _pendingLink == null ? null : _deepLinkSerial,
     );
   }
 

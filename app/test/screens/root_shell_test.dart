@@ -17,6 +17,7 @@ import 'package:stub/screens/edit_entry_screen.dart';
 import 'package:stub/screens/manual_entry_screen.dart';
 import 'package:stub/screens/root_shell.dart';
 import 'package:stub/screens/scan_screen.dart';
+import 'package:stub/util/deep_link.dart';
 import 'package:stub/util/receipt_parser.dart';
 import 'package:stub/widgets/stub_bottom_nav.dart';
 import 'package:stub/widgets/stub_loading_indicator.dart';
@@ -498,8 +499,8 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
-      initialManualEntryAmount: 12.50,
-      initialManualEntryMerchant: 'Starbucks',
+      initialManualEntryLink: const ParsedDeepLink(amount: 12.50, merchant: 'Starbucks'),
+      initialManualEntryToken: 1,
     )));
     await tester.pumpAndSettle();
 

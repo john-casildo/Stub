@@ -181,4 +181,57 @@ void main() {
     expect(find.text('12.50'), findsOneWidget);
     expect(find.text('Starbucks'), findsOneWidget);
   });
+
+  testWidgets(
+    'A second, different warm deep link reopens ManualEntryScreen pre-filled with its own values',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({'has_seen_backup_prompt': true});
+      final deepLinks = FakeDeepLinkService();
+      final categories = FakeCategoryRepository();
+      await categories.create('Groceries');
+
+      await tester.pumpWidget(StubApp(
+        categoryRepository: categories,
+        transactionRepository: FakeTransactionRepository(),
+        budgetRepository: FakeBudgetRepository(),
+        accountLinkService: FakeAccountLinkService(),
+        localPrefs: LocalPrefs(),
+        themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+        currencyNotifier: ValueNotifier<String>("USD"),
+        textRecognitionService: FakeTextRecognitionService(),
+        deviceAuthService: FakeDeviceAuthService(),
+        deepLinkService: deepLinks,
+      ));
+      await tester.pump();
+
+      await tester.tap(find.text('Unlock'));
+      await tester.pumpAndSettle();
+
+      // No pending link yet at launch — plain ledger.
+      expect(find.byType(ManualEntryScreen), findsNothing);
+
+      // First warm link while the app is already running.
+      deepLinks.emit(Uri.parse('com.stubapp.stub://log-expense?amount=5.00&merchant=Cafe%20A'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ManualEntryScreen), findsOneWidget);
+      expect(find.text('5.00'), findsOneWidget);
+      expect(find.text('Cafe A'), findsOneWidget);
+
+      // Close it.
+      await tester.tap(find.byType(IconButton).first);
+      await tester.pumpAndSettle();
+      expect(find.byType(ManualEntryScreen), findsNothing);
+
+      // A second, different warm link later in the same app process must
+      // still be able to reopen ManualEntryScreen — this is exactly the
+      // case a plain one-shot bool guard would permanently block.
+      deepLinks.emit(Uri.parse('com.stubapp.stub://log-expense?amount=8.75&merchant=Cafe%20B'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ManualEntryScreen), findsOneWidget);
+      expect(find.text('8.75'), findsOneWidget);
+      expect(find.text('Cafe B'), findsOneWidget);
+    },
+  );
 }
