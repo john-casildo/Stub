@@ -31,12 +31,19 @@ transactionsRouter.post('/', requireAuth, async (req: AuthedRequest, res) => {
     source: string;
     occurredAt: string;
   };
+  // `select ... from categories` (rather than `values`) is an application-level
+  // ownership check: under RLS the subselect returns zero rows for another
+  // user's category, so the insert becomes a no-op. Postgres's own FK check
+  // runs with elevated privileges and bypasses RLS, so it would otherwise
+  // happily accept a category the caller can't even see.
   const row = await withUserContext(req.userId!, (client) =>
     client
       .query(
         `with inserted as (
            insert into transactions (user_id, category_id, merchant, amount, source, occurred_at)
-           values ($1, $2, $3, $4, $5, $6)
+           select $1, c.id, $3, $4, $5, $6
+           from categories c
+           where c.id = $2
            returning *
          )
          select inserted.*, c.name as category_name
@@ -45,6 +52,9 @@ transactionsRouter.post('/', requireAuth, async (req: AuthedRequest, res) => {
       )
       .then((r) => r.rows[0]),
   );
+  if (!row) {
+    return res.status(404).json({ error: { code: 'category_not_found', message: 'Category not found' } });
+  }
   res.status(201).json(row);
 });
 

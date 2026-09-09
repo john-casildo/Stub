@@ -70,4 +70,17 @@ describe('transactions', () => {
     const listRes = await request(app).get('/transactions').set('Authorization', `Bearer ${tokenB}`);
     expect(listRes.body).toHaveLength(0);
   });
+
+  it("rejects creating a transaction against another user's category", async () => {
+    const { categoryId } = await setup();
+    const tokenB = (await request(app).post('/auth/anonymous')).body.token as string;
+
+    const res = await request(app)
+      .post('/transactions')
+      .set('Authorization', `Bearer ${tokenB}`)
+      .send({ categoryId, merchant: 'Store', amount: 12.5, source: 'manual', occurredAt: '2026-09-01T00:00:00.000Z' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('category_not_found');
+  });
 });
