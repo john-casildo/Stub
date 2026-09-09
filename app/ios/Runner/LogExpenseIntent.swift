@@ -38,18 +38,36 @@ struct LogExpenseIntent: AppIntent {
         components.scheme = "com.stubapp.stub"
         components.host = "log-expense"
 
-        var items = [URLQueryItem(name: "amount", value: String(amount))]
+        var items = [URLQueryItem(name: "amount", value: Self.percentEncodeQueryValue(String(amount)))]
         if let merchant = merchant, !merchant.isEmpty {
-            // URLComponents percent-encodes query item values for us.
-            items.append(URLQueryItem(name: "merchant", value: merchant))
+            items.append(URLQueryItem(name: "merchant", value: Self.percentEncodeQueryValue(merchant)))
         }
-        components.queryItems = items
+        // Using percentEncodedQueryItems (not queryItems) since we've
+        // already done the encoding ourselves below — queryItems would
+        // double-encode the "%" from our own escaping.
+        components.percentEncodedQueryItems = items
 
         if let url = components.url {
             _ = await UIApplication.shared.open(url)
         }
 
         return .result()
+    }
+
+    /// `URLComponents`' own query encoding leaves "+" as a literal
+    /// character — it's a legal query character per RFC 3986 — but Dart's
+    /// `Uri.queryParameters` follows the older
+    /// `application/x-www-form-urlencoded` convention of decoding "+" as a
+    /// space, so an unescaped "+" in a merchant name (e.g. "Coffee + Bagel")
+    /// would silently arrive on the Dart side as a space. Explicitly
+    /// percent-encoding "+" (alongside "&"/"=", which must stay encoded in
+    /// a value so they can't be mistaken for query delimiters) avoids that.
+    private static func percentEncodeQueryValue(_ value: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove("+")
+        allowed.remove("&")
+        allowed.remove("=")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 }
 

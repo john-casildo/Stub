@@ -303,12 +303,6 @@ hot-reload/JIT machinery that never ships to real users. Always measure
   Shortcut → Stub opens pre-filled" flow have never been tested on a
   physical device. No Android equivalent — Shortcuts/App Intents is an
   iOS-only concept.
-- **Known minor gap**: a merchant name containing `+` round-trips as a
-  space (`URLComponents` leaves `+` unescaped when building the deep
-  link's URL; Dart's query-parameter decoding then reads it as a space).
-  Low-impact — the user reviews the pre-filled `ManualEntryScreen` before
-  saving — but worth a fix (`percentEncodedQueryItems` with `+` explicitly
-  encoded as `%2B`) if it ever comes up in practice.
 - **Language switching (English/Spanish UI) is scaffolded but not
   implemented.** `flutter_localizations`/`intl` are added to
   `pubspec.yaml`, `l10n.yaml` is configured, and `LocalPrefs.localeCode`/
