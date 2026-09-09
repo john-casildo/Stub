@@ -1,6 +1,7 @@
 import express from 'express';
 import { authRouter } from './routes/auth';
 import { accountRouter } from './routes/account';
+import { categoriesRouter } from './routes/categories';
 
 export function createApp() {
   const app = express();
@@ -12,6 +13,7 @@ export function createApp() {
 
   app.use('/auth', authRouter);
   app.use('/account', accountRouter);
+  app.use('/categories', categoriesRouter);
 
   return app;
 }
