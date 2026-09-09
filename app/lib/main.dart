@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:workmanager/workmanager.dart';
 import 'config/supabase_config.dart';
 import 'data/account_link_service.dart';
 import 'data/budget_repository.dart';
 import 'data/category_repository.dart';
 import 'data/device_auth_service.dart';
 import 'data/local_auth_device_auth_service.dart';
+import 'data/local_notifications_service.dart';
 import 'data/local_prefs.dart';
 import 'data/mlkit_text_recognition_service.dart';
+import 'data/notification_service.dart';
 import 'data/supabase_account_link_service.dart';
 import 'data/supabase_budget_repository.dart';
 import 'data/supabase_category_repository.dart';
 import 'data/supabase_transaction_repository.dart';
 import 'data/text_recognition_service.dart';
 import 'data/transaction_repository.dart';
+import 'data/weekly_summary_scheduler.dart';
 import 'screens/backup_prompt_screen.dart';
 import 'screens/lock_screen.dart';
 import 'screens/root_shell.dart';
@@ -30,10 +34,16 @@ void main() {
 }
 
 class _StartupResult {
-  _StartupResult({required this.localPrefs, required this.themeModeNotifier, required this.currencyNotifier});
+  _StartupResult({
+    required this.localPrefs,
+    required this.themeModeNotifier,
+    required this.currencyNotifier,
+    required this.lockEnabledNotifier,
+  });
   final LocalPrefs localPrefs;
   final ValueNotifier<ThemeMode> themeModeNotifier;
   final ValueNotifier<String> currencyNotifier;
+  final ValueNotifier<bool> lockEnabledNotifier;
 }
 
 /// `Supabase.initialize` is safe to call more than once (it no-ops if
@@ -50,10 +60,13 @@ Future<_StartupResult> _startup() async {
   final currencyCode = await localPrefs.currencyCode();
   CurrencyConfig.code = currencyCode;
   final currencyNotifier = ValueNotifier<String>(currencyCode);
+  final lockEnabledNotifier = ValueNotifier<bool>(await localPrefs.lockEnabled());
+  await _initWeeklySummary(localPrefs);
   return _StartupResult(
     localPrefs: localPrefs,
     themeModeNotifier: themeModeNotifier,
     currencyNotifier: currencyNotifier,
+    lockEnabledNotifier: lockEnabledNotifier,
   );
 }
 
@@ -61,6 +74,24 @@ Future<void> _ensureSession() async {
   final client = Supabase.instance.client;
   if (client.auth.currentSession == null) {
     await client.auth.signInAnonymously();
+  }
+}
+
+/// Initializes the background-task plugin (a no-op if the toggle has
+/// never been turned on) and, if "Weekly summary" is already enabled
+/// from a previous session, re-registers the periodic task — cheap and
+/// idempotent, and protects against the OS having dropped the
+/// registration (e.g. after a reinstall or OS update) while the
+/// preference itself stayed on. A failure here must never block startup.
+Future<void> _initWeeklySummary(LocalPrefs localPrefs) async {
+  try {
+    await Workmanager().initialize(weeklySummaryCallbackDispatcher);
+    if (await localPrefs.weeklySummaryEnabled()) {
+      await scheduleWeeklySummary();
+    }
+  } catch (_) {
+    // Best-effort — the toggle stays available even if registration
+    // failed; SettingsScreen re-attempts it the next time it's touched.
   }
 }
 
@@ -108,8 +139,10 @@ class _StartupGateState extends State<_StartupGate> {
           localPrefs: result.localPrefs,
           themeModeNotifier: result.themeModeNotifier,
           currencyNotifier: result.currencyNotifier,
+          lockEnabledNotifier: result.lockEnabledNotifier,
           textRecognitionService: MlKitTextRecognitionService(),
           deviceAuthService: LocalAuthDeviceAuthService(),
+          notificationService: LocalNotificationsService(),
         );
       },
     );
@@ -200,8 +233,10 @@ class StubApp extends StatefulWidget {
     required this.localPrefs,
     required this.themeModeNotifier,
     required this.currencyNotifier,
+    required this.lockEnabledNotifier,
     required this.textRecognitionService,
     required this.deviceAuthService,
+    required this.notificationService,
   });
 
   final CategoryRepository categoryRepository;
@@ -211,8 +246,10 @@ class StubApp extends StatefulWidget {
   final LocalPrefs localPrefs;
   final ValueNotifier<ThemeMode> themeModeNotifier;
   final ValueNotifier<String> currencyNotifier;
+  final ValueNotifier<bool> lockEnabledNotifier;
   final TextRecognitionService textRecognitionService;
   final DeviceAuthService deviceAuthService;
+  final NotificationService notificationService;
 
   @override
   State<StubApp> createState() => _StubAppState();
@@ -232,6 +269,7 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.currencyNotifier.addListener(_syncCurrencyConfig);
+    widget.lockEnabledNotifier.addListener(_onLockEnabledChanged);
     _checkSupport();
   }
 
@@ -239,11 +277,24 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.currencyNotifier.removeListener(_syncCurrencyConfig);
+    widget.lockEnabledNotifier.removeListener(_onLockEnabledChanged);
     super.dispose();
   }
 
   void _syncCurrencyConfig() {
     CurrencyConfig.code = widget.currencyNotifier.value;
+  }
+
+  /// Turning the lock off from Settings only hides the `LockScreen`
+  /// overlay (via `_showLock`) — it doesn't by itself make `_buildHome()`
+  /// render anything, since that's gated on `_handleUnlock()` having run
+  /// (which also does the one-time backup-prompt bookkeeping). Without
+  /// this, disabling the toggle while still sitting at the lock screen
+  /// left the app on a blank screen instead of the ledger.
+  void _onLockEnabledChanged() {
+    if (!widget.lockEnabledNotifier.value && !_unlocked) {
+      _handleUnlock();
+    }
   }
 
   @override
@@ -291,7 +342,7 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
     setState(() => _showBackupPrompt = showPrompt);
   }
 
-  bool get _showLock => _supported == true && !_unlocked;
+  bool _showLock(bool lockEnabled) => _supported == true && !_unlocked && lockEnabled;
 
   Widget _buildHome() {
     // Nothing to show yet — either still checking device support, or
@@ -314,8 +365,11 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
       accountLinkService: widget.accountLinkService,
       themeModeNotifier: widget.themeModeNotifier,
       currencyNotifier: widget.currencyNotifier,
+      lockEnabledNotifier: widget.lockEnabledNotifier,
+      lockSupported: _supported == true,
       localPrefs: widget.localPrefs,
       textRecognitionService: widget.textRecognitionService,
+      notificationService: widget.notificationService,
     );
   }
 
@@ -329,15 +383,21 @@ class _StubAppState extends State<StubApp> with WidgetsBindingObserver {
         theme: StubTheme.light(),
         darkTheme: StubTheme.dark(),
         themeMode: mode,
-        builder: (context, child) => Stack(
-          children: [
-            if (child != null) IgnorePointer(ignoring: _showLock, child: child),
-            if (_showLock)
-              LockScreen(
-                deviceAuthService: widget.deviceAuthService,
-                onUnlock: _handleUnlock,
-              ),
-          ],
+        builder: (context, child) => ValueListenableBuilder<bool>(
+          valueListenable: widget.lockEnabledNotifier,
+          builder: (context, lockEnabled, _) {
+            final showLock = _showLock(lockEnabled);
+            return Stack(
+              children: [
+                if (child != null) IgnorePointer(ignoring: showLock, child: child),
+                if (showLock)
+                  LockScreen(
+                    deviceAuthService: widget.deviceAuthService,
+                    onUnlock: _handleUnlock,
+                  ),
+              ],
+            );
+          },
         ),
         home: _buildHome(),
       ),

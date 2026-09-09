@@ -17,6 +17,7 @@ class EditEntryScreen extends StatefulWidget {
     required this.categories,
     required this.selectedCategory,
     required this.sourceLabel,
+    required this.dateLabel,
     required this.onClose,
     required this.onSave,
     this.onDelete,
@@ -28,6 +29,7 @@ class EditEntryScreen extends StatefulWidget {
   final List<String> categories;
   final String selectedCategory;
   final String sourceLabel;
+  final String dateLabel;
   final VoidCallback onClose;
   final void Function(String merchant, double amount, String category) onSave;
   final VoidCallback? onDelete;
@@ -111,6 +113,7 @@ class _EditEntryScreenState extends State<EditEntryScreen> {
                   ],
                 ),
               ),
+              StubFieldRow(label: 'Date', value: widget.dateLabel, valueColor: ink.withValues(alpha: 0.6)),
               StubFieldRow(label: 'Source', value: widget.sourceLabel, valueColor: ink.withValues(alpha: 0.6)),
               const SizedBox(height: 22),
               StubButton(

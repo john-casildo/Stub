@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 
 class CategorySpend {
-  const CategorySpend({required this.categoryId, required this.name, required this.fraction, required this.color});
+  const CategorySpend({
+    required this.categoryId,
+    required this.name,
+    required this.fraction,
+    required this.color,
+    required this.icon,
+  });
 
   final String categoryId;
   final String name;
@@ -11,4 +17,6 @@ class CategorySpend {
   /// percentage of.
   final double? fraction;
   final Color color;
+  /// Key into lib/theme/category_icons.dart's curated icon set.
+  final String icon;
 }

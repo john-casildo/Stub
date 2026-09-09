@@ -81,3 +81,162 @@ done; fold anything durable into `CLAUDE.md` instead of leaving it here.
       global picker and `AddCategoryScreen`'s per-category override both
       switched from a 2-chip `Wrap` to a `DropdownButton` over that list.
       Implemented same session.
+- [x] "Lines on the bottom" — resolved once a real (non-stale) screenshot
+      showed the actual complaint: the divider line under each Ledger
+      category row (`_CategoryRow`'s `Border(bottom: BorderSide(...))`).
+      Removed entirely, per "remove the lines in categories". Implemented
+      same session.
+- [x] Add empty-state messaging wherever a screen currently has no data.
+      `LedgerScreen` now shows "No categories yet — add one from the
+      Budgets tab..." and "No transactions yet — scan a receipt or add
+      one manually." in place of a blank card/section; `BudgetsScreen`
+      shows "No categories yet — add one below..." above its existing
+      "+ Add a category" button. (`CategoryDetailScreen` already had an
+      empty state for a category with no transactions.) Implemented same
+      session.
+- [x] Add a native launch screen (like Airbnb's) — the app's logo centered
+      on a plain background, shown instantly while the OS/Flutter engine
+      boots, before the lock screen appears. Implemented: new
+      `tool/generate_launch_image_test.dart` renders the Stub mark to
+      1x/2x/3x PNGs for both `ios/Runner/Assets.xcassets/LaunchImage
+      .imageset/` and Android's `drawable-nodpi/launch_image.png`;
+      `LaunchScreen.storyboard` and both `launch_background.xml` variants
+      updated to a `bgLight` (`#ECE7DC`) background with the mark
+      centered at 240x240. No dark-mode variant yet (matches the plain-
+      light-background reference screenshot) — could add one later via
+      an iOS asset-catalog color set + Android `-night` resources if
+      wanted. Not verified on a real device yet (a full launch-screen
+      change needs a real cold app launch to see, not `flutter run`'s
+      hot-reload path). Implemented same session.
+- [x] Update how the CSV is exported — clarified: needed a way to specify
+      what gets exported (which categories, which month), not always
+      dumping every transaction ever. New `ExportDataScreen` (month
+      dropdown + multi-select category chips) opens from Settings'
+      "Export data" button; `RootShell._performExport` filters before
+      calling `exportTransactionsCsv`. Implemented same session.
+- [x] Add a max limit on the budget limit amount field (AddCategoryScreen)
+      — capped at 1,000,000 (a sanity ceiling, not a technical limit;
+      picked without explicit confirmation, easy to change). Blocks save
+      with a snackbar if exceeded. Implemented same session.
+- [x] Add a max character length on the category name field
+      (AddCategoryScreen) — capped at 40 characters via `TextField
+      .maxLength` (picked without explicit confirmation, easy to change).
+      Implemented same session.
+- [x] Cap the total number of categories a user can create at 30 — past
+      that, `RootShell._openAddCategory` shows a snackbar instead of
+      opening `AddCategoryScreen`. Implemented same session.
+- [x] Limit Ledger's "RECENT" list to the 5 most recent transactions
+      instead of showing all of them. `RootShell` now passes
+      `data.transactions.take(5)` to `LedgerScreen.recent` (the full list
+      is still used everywhere else — export, delete-all, category
+      filtering). Implemented same session.
+- [x] Add a Face ID/passcode on/off toggle in Settings — new
+      `LocalPrefs.lockEnabled` (default `true`, so existing behavior is
+      unchanged unless explicitly turned off) + a live `lockEnabledNotifier`
+      threaded through `StubApp`, same pattern as theme/currency; the
+      toggle is hidden entirely on a device with nothing enrolled. Found
+      and fixed a real bug along the way: turning the lock off while
+      sitting at the lock screen hid the overlay but left the home screen
+      unbuilt (blank screen) since `_buildHome()` was gated on
+      `_handleUnlock()` having run, not just the overlay being hidden —
+      `_onLockEnabledChanged` now calls it when needed. Also renamed
+      AddCategoryScreen's "Monthly limit" label to just "Limit" (the
+      period picker already covers weekly/yearly/custom). Implemented
+      same session.
+- [x] Real weekly-summary notifications — the second (and bigger) of the
+      two notification toggles. Fires roughly weekly (aimed at Sunday
+      6pm, but iOS/Android background tasks are opportunistic — not an
+      exact-time guarantee) with the real computed total spent + top
+      category for that week, even if the app hasn't been opened. New
+      `workmanager`-based `weekly_summary_scheduler.dart` (registers a
+      periodic background task; its callback dispatcher re-initializes
+      Supabase in a fresh isolate to fetch fresh data) + pure
+      `util/weekly_summary.dart` logic (fully unit-tested). Settings'
+      "Weekly summary" toggle now requests notification permission and
+      registers/cancels the real task via a new `onWeeklySummaryToggled`
+      callback (kept separate from direct `workmanager` calls since that
+      package has no fake and can't run inside a widget test). iOS
+      `Info.plist` updated with `UIBackgroundModes`
+      (fetch/processing) + `BGTaskSchedulerPermittedIdentifiers`. Not yet
+      verified on a real device — timing especially, since background
+      task firing is inherently opportunistic on both platforms.
+      Implemented same session.
+- [x] Real budget-limit-warning notifications — first of the two
+      notification toggles to get built (weekly summary is bigger, needs
+      background scheduling, deferred). Fires a local notification at
+      80%/90%/97%/100%/105% of a category's budget (once per tier per
+      period, persisted via `LocalPrefs` so it survives app restarts and
+      resets on period rollover). New `NotificationService` abstraction +
+      `LocalNotificationsService` (`flutter_local_notifications`) +
+      `FakeNotificationService`; pure threshold logic in
+      `util/budget_thresholds.dart`; wired into `RootShell._load()` and
+      gated on Settings' existing "Budget limit warnings" toggle, which
+      now also requests the OS permission when turned on. Android's
+      manifest updated with `POST_NOTIFICATIONS`. Not yet verified on a
+      real device (needs a real platform channel, same as ML Kit/local_auth).
+      Implemented same session.
+- [x] "OVERALL isn't working" (still) — the real bug was never the display
+      format (dollar vs. percentage), it was the calculation: total-spent
+      ÷ total-limit weighted by budget size let one huge-limit,
+      near-$0-spent category drag the combined figure toward 0% even
+      with another category at 120%. Fixed by switching `RootShell
+      ._overallFraction` to average each budgeted category's own
+      fraction instead. Implemented same session, with an updated
+      `root_shell_test.dart` case.
+- [x] Redesign the OVERALL hero (was a confusing blended percentage) — first
+      changed to real "$spent / $limit" dollar figures, then **reverted
+      back to percentage** after real testing showed the dollar version
+      looked worse in practice (huge numbers, and "change it" feedback
+      once seen live); `StubHeroAmount.range` was added then removed
+      again same session. `CategoryDetailScreen` still shows the
+      established limit ("of $X limit") alongside its dollar total — that
+      part stands. Also added ellipsis-truncation for long category names
+      (Ledger/Budgets rows, `CategoryDetailScreen`'s app-bar title, now
+      also colored by budget status on both, not just the percentage
+      number) and shrink-to-fit (`FittedBox`) on `StubHeroAmount` for long
+      amounts. Implemented same session.
+- [x] Ledger's manual-entry FAB made bigger (60x60, was defaulting to
+      Material's ~56dp regardless of intent) and its "+" icon recolored
+      from a hardcoded white to `onAccentDark`/`onAccentLight` to match
+      the theme, per feedback. Implemented same session.
+- [x] Native launch screen: shrunk the logo (240 → 120 logical size) and
+      made its background follow the app's light/dark theme instead of
+      always being light, per feedback after seeing it on a real cold
+      launch. Implemented same session (see `generate_launch_image_test
+      .dart`'s entry in the file map).
+- [x] Color the percentage/progress (category rows + the new combined
+      OVERALL hero) based on proximity to the budget limit — include red
+      when very close to or over budget. Implemented: new `BudgetStatus`
+      enum (`lib/theme/budget_status.dart`, normal/warning/danger) drives
+      flat amber/red overrides on the percentage text, `StubProgressBar`,
+      `StubProgressRing`, and `StubHeroAmount.percent` everywhere a
+      category or the combined OVERALL hero shows progress. Same session.
+- [ ] User asked "can we do this?" about a screenshot of another app's
+      Apple Pay auto-tracking feature (an iOS Shortcuts automation that
+      fires on an Apple Pay transaction and saves an expense
+      automatically, with "Automation instructions"/"Add to Shortcuts"
+      setup buttons). This is a feasibility question, not yet scoped —
+      will respond with a feasibility take once the amount-cap work below
+      is done.
+- [x] `StubLoadingIndicator`'s paper-ticket animation was hard to see in
+      light mode (its fixed cream paper color sits too close to the light
+      background). Fixed with a subtle fixed dark outline traced around
+      the paper shape, visible against either theme. Implemented same
+      session.
+- [x] Raised the AddCategoryScreen limit cap from 1,000,000 to
+      10,000,000,000, and added a `ThousandsSeparatorInputFormatter` that
+      live-formats the limit field with commas as you type ("1000000" →
+      "1,000,000"); `_save()` strips them back out before parsing.
+      Extracted to `util/thousands_input_formatter.dart` and applied to
+      `ManualEntryScreen`'s amount field too (same cap, same formatter),
+      per follow-up feedback. Implemented same session, with regression
+      tests for both screens plus the formatter itself.
+- [x] Move the CURRENCY dropdown on `AddCategoryScreen` to the right side
+      — now a `Row` with the "CURRENCY" label on the left and the
+      `DropdownButton` on the right, instead of stacked. Implemented same
+      session.
+- [x] SOURCE field on `EditEntryScreen` was showing a date ("6/9") instead
+      of the real source — was wired to `transaction.dateLabel` instead of
+      the actual source. Fixed: real source label (`transactionSourceLabel`)
+      restored, plus a new DATE row so the date isn't lost. Implemented
+      same session, with a regression test in `root_shell_test.dart`.

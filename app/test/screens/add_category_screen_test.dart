@@ -13,7 +13,7 @@ void main() {
       MaterialApp(
         home: AddCategoryScreen(
           onClose: () {},
-          onSave: (name, limit, type, start, end, currencyCode) {
+          onSave: (name, limit, type, start, end, currencyCode, icon, colorIndex) {
             savedName = name;
             savedLimit = limit;
             savedType = type;
@@ -40,7 +40,7 @@ void main() {
       MaterialApp(
         home: AddCategoryScreen(
           onClose: () {},
-          onSave: (name, limit, type, start, end, currencyCode) => savedCurrencyCode = currencyCode,
+          onSave: (name, limit, type, start, end, currencyCode, icon, colorIndex) => savedCurrencyCode = currencyCode,
         ),
       ),
     );
@@ -72,12 +72,13 @@ void main() {
       MaterialApp(
         home: AddCategoryScreen(
           onClose: () {},
-          onSave: (name, limit, type, start, end, currencyCode) => saveCalled = true,
+          onSave: (name, limit, type, start, end, currencyCode, icon, colorIndex) => saveCalled = true,
         ),
       ),
     );
 
     await tester.enterText(find.byType(TextField).first, 'Groceries');
+    await tester.ensureVisible(find.text('Custom'));
     await tester.tap(find.text('Custom'));
     await tester.pump();
     await tester.ensureVisible(find.text('Save category'));
@@ -96,12 +97,13 @@ void main() {
       MaterialApp(
         home: AddCategoryScreen(
           onClose: () {},
-          onSave: (name, limit, type, start, end, currencyCode) => saveCalled = true,
+          onSave: (name, limit, type, start, end, currencyCode, icon, colorIndex) => saveCalled = true,
         ),
       ),
     );
 
     await tester.enterText(find.byType(TextField).first, 'Groceries');
+    await tester.ensureVisible(find.text('Custom'));
     await tester.tap(find.text('Custom'));
     await tester.pump();
 
@@ -132,5 +134,104 @@ void main() {
 
     expect(find.text('End date must be after the start date.'), findsOneWidget);
     expect(saveCalled, isFalse);
+  });
+
+  testWidgets('Defaults to the first icon/color, and picking others is passed through to onSave', (tester) async {
+    String? savedIcon;
+    int? savedColorIndex;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AddCategoryScreen(
+          onClose: () {},
+          onSave: (name, limit, type, start, end, currencyCode, icon, colorIndex) {
+            savedIcon = icon;
+            savedColorIndex = colorIndex;
+          },
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, 'Groceries');
+    await tester.ensureVisible(find.text('Save category'));
+    await tester.tap(find.text('Save category'));
+    await tester.pump();
+    expect(savedIcon, 'tag');
+    expect(savedColorIndex, 0);
+
+    // Second icon choice is 'cart', second color swatch is index 1.
+    await tester.ensureVisible(find.byKey(const Key('category-icon-cart')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('category-icon-cart')));
+    await tester.ensureVisible(find.byKey(const Key('category-color-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('category-color-1')));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Save category'));
+    await tester.tap(find.text('Save category'));
+    await tester.pump();
+    expect(savedIcon, 'cart');
+    expect(savedColorIndex, 1);
+  });
+
+  testWidgets('Blocks save and shows a message when the limit exceeds the max', (tester) async {
+    var saveCalled = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AddCategoryScreen(
+          onClose: () {},
+          onSave: (name, limit, type, start, end, currencyCode, icon, colorIndex) => saveCalled = true,
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, 'Groceries');
+    await tester.enterText(find.byType(TextField).last, '20000000000');
+    await tester.ensureVisible(find.text('Save category'));
+    await tester.tap(find.text('Save category'));
+    await tester.pump();
+
+    expect(find.textContaining("can't be more than"), findsOneWidget);
+    expect(saveCalled, isFalse);
+  });
+
+  testWidgets('Category name field enforces a max length', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AddCategoryScreen(
+          onClose: () {},
+          onSave: (name, limit, type, start, end, currencyCode, icon, colorIndex) {},
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(find.byType(TextField).first);
+    expect(field.maxLength, 40);
+  });
+
+  testWidgets('Limit field shows live thousands separators as you type, and saves the raw number', (tester) async {
+    double? savedLimit;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AddCategoryScreen(
+          onClose: () {},
+          onSave: (name, limit, type, start, end, currencyCode, icon, colorIndex) => savedLimit = limit,
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).first, 'Groceries');
+    await tester.enterText(find.byType(TextField).last, '1234567.89');
+    await tester.pump();
+
+    expect(find.text('1,234,567.89'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Save category'));
+    await tester.tap(find.text('Save category'));
+    await tester.pump();
+
+    expect(savedLimit, 1234567.89);
   });
 }

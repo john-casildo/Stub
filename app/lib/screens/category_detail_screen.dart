@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/transaction.dart';
+import '../theme/budget_status.dart';
+import '../theme/category_icons.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import '../util/currency.dart';
 import '../widgets/stub_card.dart';
 import '../widgets/stub_hero_amount.dart';
 import '../widgets/stub_icon.dart';
@@ -23,19 +26,29 @@ class CategoryDetailScreen extends StatelessWidget {
   const CategoryDetailScreen({
     super.key,
     required this.categoryName,
+    required this.icon,
+    required this.color,
     required this.transactions,
     required this.onClose,
     this.onTransactionTap,
     this.fraction,
     this.currencyCode,
+    this.limit,
   });
 
   final String categoryName;
+  /// Key into lib/theme/category_icons.dart's curated icon set.
+  final String icon;
+  final Color color;
   final List<Transaction> transactions;
   final VoidCallback onClose;
   final ValueChanged<Transaction>? onTransactionTap;
   final double? fraction;
   final String? currencyCode;
+  /// The category's established budget limit, if it has one — shown
+  /// alongside the total so the actual number you set is visible here,
+  /// not just its progress ring/percentage.
+  final double? limit;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +63,21 @@ class CategoryDetailScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(icon: StubIcon(StubIcons.x, size: 18, color: ink), onPressed: onClose),
-        title: Text(categoryName, style: StubText.archivo(fontSize: 16, fontWeight: FontWeight.w700, color: ink)),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            StubIcon(categoryIconData(icon), size: 18, color: color),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                categoryName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: StubText.archivo(fontSize: 16, fontWeight: FontWeight.w700, color: ink),
+              ),
+            ),
+          ],
+        ),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -67,10 +94,18 @@ class CategoryDetailScreen extends StatelessWidget {
                         Text('TOTAL', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
                         const SizedBox(height: 6),
                         StubHeroAmount(amount: total, currencyCode: currencyCode, fontSize: 26),
+                        if (limit != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'of ${formatCurrency(limit!, currencyCode: currencyCode)} limit',
+                            style: StubText.archivo(fontSize: 12, color: ink50),
+                          ),
+                        ],
                       ],
                     ),
                   ),
-                  if (fraction != null) StubProgressRing(progress: fraction!),
+                  if (fraction != null)
+                    StubProgressRing(progress: fraction!, status: budgetStatusForFraction(fraction)),
                 ],
               ),
             ),

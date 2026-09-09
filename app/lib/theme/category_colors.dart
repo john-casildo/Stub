@@ -26,3 +26,14 @@ Color categoryColor(int index, Brightness brightness) {
   final palette = brightness == Brightness.dark ? _darkPalette : _lightPalette;
   return palette[index % palette.length];
 }
+
+/// How many swatch slots [categoryColor] cycles through — the color
+/// picker on AddCategoryScreen offers exactly this many choices.
+const categoryColorCount = 6;
+
+/// The palette index to render a category with: its own explicit
+/// [stored] pick when it has one, else a deterministic slot derived from
+/// its id so the same category always lands on the same fallback color
+/// (only reachable for categories created before color picking existed).
+int categoryColorIndexFor(String categoryId, int? stored) =>
+    stored ?? categoryId.hashCode.abs() % categoryColorCount;

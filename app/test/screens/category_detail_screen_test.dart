@@ -8,6 +8,8 @@ void main() {
   testWidgets('Shows the category name and its transactions', (tester) async {
     await tester.pumpWidget(MaterialApp(home: CategoryDetailScreen(
       categoryName: 'Dining',
+      icon: 'tag',
+      color: Colors.blue,
       transactions: [
         Transaction(
           id: 't1',
@@ -29,6 +31,8 @@ void main() {
   testWidgets('Shows an empty state when the category has no transactions', (tester) async {
     await tester.pumpWidget(MaterialApp(home: CategoryDetailScreen(
       categoryName: 'Dining',
+      icon: 'tag',
+      color: Colors.blue,
       transactions: const [],
       onClose: () {},
     )));
@@ -49,6 +53,8 @@ void main() {
     );
     await tester.pumpWidget(MaterialApp(home: CategoryDetailScreen(
       categoryName: 'Dining',
+      icon: 'tag',
+      color: Colors.blue,
       transactions: [transaction],
       onClose: () {},
       onTransactionTap: (t) => tapped = t,
@@ -61,6 +67,8 @@ void main() {
   testWidgets('Shows a hero total (in the category\'s own currency) and a progress ring when it has a budget', (tester) async {
     await tester.pumpWidget(MaterialApp(home: CategoryDetailScreen(
       categoryName: 'Dining',
+      icon: 'tag',
+      color: Colors.blue,
       transactions: [
         Transaction(id: 't1', categoryId: 'c1', merchant: 'A', amount: 100, category: 'Dining', source: TransactionSource.receipt, occurredAt: DateTime.now()),
         Transaction(id: 't2', categoryId: 'c1', merchant: 'B', amount: 42, category: 'Dining', source: TransactionSource.receipt, occurredAt: DateTime.now()),
@@ -74,9 +82,41 @@ void main() {
     expect(find.byType(StubProgressRing), findsOneWidget);
   });
 
+  testWidgets('Shows the established limit alongside the total when the category has a budget', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: CategoryDetailScreen(
+      categoryName: 'Dining',
+      icon: 'tag',
+      color: Colors.blue,
+      transactions: [
+        Transaction(id: 't1', categoryId: 'c1', merchant: 'A', amount: 100, category: 'Dining', source: TransactionSource.receipt, occurredAt: DateTime.now()),
+      ],
+      onClose: () {},
+      fraction: 0.5,
+      limit: 200,
+    )));
+
+    expect(find.textContaining('200.00 limit'), findsOneWidget);
+  });
+
+  testWidgets('Omits the limit line when the category has no budget', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: CategoryDetailScreen(
+      categoryName: 'Dining',
+      icon: 'tag',
+      color: Colors.blue,
+      transactions: [
+        Transaction(id: 't1', categoryId: 'c1', merchant: 'A', amount: 100, category: 'Dining', source: TransactionSource.receipt, occurredAt: DateTime.now()),
+      ],
+      onClose: () {},
+    )));
+
+    expect(find.textContaining('limit'), findsNothing);
+  });
+
   testWidgets('Omits the progress ring when the category has no budget', (tester) async {
     await tester.pumpWidget(MaterialApp(home: CategoryDetailScreen(
       categoryName: 'Dining',
+      icon: 'tag',
+      color: Colors.blue,
       transactions: [
         Transaction(id: 't1', categoryId: 'c1', merchant: 'A', amount: 100, category: 'Dining', source: TransactionSource.receipt, occurredAt: DateTime.now()),
       ],
@@ -90,6 +130,8 @@ void main() {
     var closed = false;
     await tester.pumpWidget(MaterialApp(home: CategoryDetailScreen(
       categoryName: 'Dining',
+      icon: 'tag',
+      color: Colors.blue,
       transactions: const [],
       onClose: () => closed = true,
     )));

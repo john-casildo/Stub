@@ -87,6 +87,17 @@ class _ReceiptPrinterPainter extends CustomPainter {
     path.close();
 
     canvas.drawPath(path, Paint()..color = _paper);
+    // The fixed cream paper color sits too close to the light theme's
+    // background to read as a distinct shape there — a subtle fixed dark
+    // outline (same tone as the slot) keeps the ticket visible against
+    // either theme's background, not just dark's.
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = _slot.withValues(alpha: 0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
 
     final stripeRect = Rect.fromLTWH(left, top, paperWidth, 3);
     canvas.drawRect(stripeRect, Paint()..shader = gradient.createShader(stripeRect));

@@ -4,6 +4,7 @@ import 'account_link_service.dart';
 import 'budget_repository.dart';
 import 'category_repository.dart';
 import 'device_auth_service.dart';
+import 'notification_service.dart';
 import 'text_recognition_service.dart';
 import 'transaction_repository.dart';
 import '../models/budget_limit.dart';
@@ -20,8 +21,8 @@ class FakeCategoryRepository implements CategoryRepository {
   Future<List<Category>> list() async => List.unmodifiable(_items);
 
   @override
-  Future<Category> create(String name, {String? currencyCode}) async {
-    final category = Category(id: _fakeId(), name: name, currencyCode: currencyCode);
+  Future<Category> create(String name, {String? currencyCode, String icon = 'tag', int? colorIndex}) async {
+    final category = Category(id: _fakeId(), name: name, currencyCode: currencyCode, icon: icon, colorIndex: colorIndex);
     _items.add(category);
     return category;
   }
@@ -93,9 +94,15 @@ class FakeBudgetRepository implements BudgetRepository {
     DateTime? periodEnd,
   }) async {
     String name = 'Category';
+    String icon = 'tag';
+    int? colorIndex;
     if (_categories != null) {
       final match = (await _categories.list()).where((c) => c.id == categoryId);
-      if (match.isNotEmpty) name = match.first.name;
+      if (match.isNotEmpty) {
+        name = match.first.name;
+        icon = match.first.icon;
+        colorIndex = match.first.colorIndex;
+      }
     }
     _items.add(BudgetLimit(
       id: _fakeId(),
@@ -106,6 +113,8 @@ class FakeBudgetRepository implements BudgetRepository {
       periodType: periodType,
       periodStart: periodStart,
       periodEnd: periodEnd,
+      icon: icon,
+      colorIndex: colorIndex,
     ));
   }
 }
@@ -160,4 +169,22 @@ class FakeTextRecognitionService implements TextRecognitionService {
 
   @override
   Future<List<RecognizedLine>> recognizeText(String imagePath) async => result;
+}
+
+class FakeNotificationService implements NotificationService {
+  FakeNotificationService({this.permissionGranted = true});
+  bool permissionGranted;
+  bool permissionRequested = false;
+  final List<({String title, String body})> shown = [];
+
+  @override
+  Future<bool> requestPermission() async {
+    permissionRequested = true;
+    return permissionGranted;
+  }
+
+  @override
+  Future<void> show({required String title, required String body}) async {
+    shown.add((title: title, body: body));
+  }
 }

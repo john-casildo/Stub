@@ -8,10 +8,19 @@ fallback only for low-confidence reads (itemized/multi-column receipts).
 
 ## Status
 
-All 6 core screens are built and wired: Ledger, Scan, Edit Entry, Manual
-Entry, Budgets, and Lock. Data is currently sample/static — real camera/OCR
-pipeline wiring and Supabase-backed data are the next milestones. See
-[`CLAUDE.md`](CLAUDE.md)'s Open Items for the current pre-ship blockers.
+All core screens are built and wired to real data: Ledger, Scan, Edit
+Entry, Manual Entry, Budgets, Lock, Add Category, Category Detail, Profile,
+and Settings. The app reads and writes real transactions/categories/budgets
+through Supabase (anonymous auth by default, with an optional Email link to
+back up the account), gates behind the device's real biometric/passcode
+lock, and scans receipts/payment-app/bank screenshots through a real
+capture → on-device OCR (Google ML Kit) → parse → human-review pipeline.
+Categories carry a user-chosen icon and color, and budget progress
+(individual categories and a combined "OVERALL" figure) is color-coded —
+amber approaching the limit, red at or over it. See [`CLAUDE.md`](CLAUDE.md)'s
+Open Items for what's still outstanding (cloud-vision fallback for
+itemized receipts, language switching, notification scheduling, and a few
+others not yet verified on a real device).
 
 ## Getting started
 
@@ -22,6 +31,9 @@ cd app
 flutter pub get
 flutter run
 ```
+
+Note: ML Kit (the on-device OCR used by the scan feature) doesn't support
+the iOS Simulator on Apple Silicon — run on a real device to test scanning.
 
 Useful commands (run from `app/`):
 

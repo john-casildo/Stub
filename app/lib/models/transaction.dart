@@ -1,5 +1,31 @@
 enum TransactionSource { receipt, paymentApp, bankScreenshot, manual }
 
+/// Human-readable label for a transaction's source, shown on
+/// `EditEntryScreen`'s SOURCE row and used when creating a transaction
+/// from a scan.
+String transactionSourceLabel(TransactionSource source) => switch (source) {
+      TransactionSource.receipt => 'Receipt scan',
+      TransactionSource.paymentApp => 'Payment app scan',
+      TransactionSource.bankScreenshot => 'Bank screenshot scan',
+      TransactionSource.manual => 'Manual',
+    };
+
+/// Human-readable label for a date — "Today"/"Yesterday"/weekday for
+/// anything within the last week, else "M/D". Shared by `Transaction
+/// .dateLabel` (an existing transaction) and `EditEntryScreen`'s DATE row
+/// when creating one from a scan, where there's no `Transaction` yet.
+String transactionDateLabel(DateTime occurredAt) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(occurredAt.year, occurredAt.month, occurredAt.day);
+  final diff = today.difference(day).inDays;
+  if (diff == 0) return 'Today';
+  if (diff == 1) return 'Yesterday';
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  if (diff < 7) return weekdays[occurredAt.weekday - 1];
+  return '${occurredAt.month}/${occurredAt.day}';
+}
+
 class Transaction {
   const Transaction({
     required this.id,
@@ -19,17 +45,9 @@ class Transaction {
   final TransactionSource source;
   final DateTime occurredAt;
 
-  String get dateLabel {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(occurredAt.year, occurredAt.month, occurredAt.day);
-    final diff = today.difference(day).inDays;
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    if (diff < 7) return weekdays[occurredAt.weekday - 1];
-    return '${occurredAt.month}/${occurredAt.day}';
-  }
+  String get dateLabel => transactionDateLabel(occurredAt);
+
+  String get sourceLabel => transactionSourceLabel(source);
 
   static String _wireSource(TransactionSource source) => switch (source) {
         TransactionSource.receipt => 'receipt',

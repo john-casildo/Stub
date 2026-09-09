@@ -38,9 +38,11 @@ class _LockScreenState extends State<LockScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Fixed dark bezel — not theme-reactive, see DESIGN.md §4/§2.
-    const bezel = Color(0xFF1B1712);
-    const paperText = Color(0xFFF3ECDD);
+    // Always-dark bezel, but the exact shade still follows the app's
+    // light/dark theme — see DESIGN.md §2's light vs dark --phone-body.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bezel = isDark ? StubColors.phoneBodyDark : StubColors.phoneBodyLight;
+    const paperText = StubColors.inkDark;
 
     return Scaffold(
       backgroundColor: bezel,

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/budget_limit.dart';
+import '../theme/budget_status.dart';
+import '../theme/category_colors.dart';
+import '../theme/category_icons.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../widgets/stub_bottom_nav.dart';
@@ -62,16 +65,30 @@ class BudgetsScreen extends StatelessWidget {
                 const SizedBox(height: 18),
                 Text('CATEGORY LIMITS', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
                 const SizedBox(height: 10),
-                StubCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-                  child: Column(children: [
-                    for (final b in budgets)
-                      StubPressable(
-                        onTap: onCategoryTap == null ? null : () => onCategoryTap!(b),
-                        child: _BudgetRow(budget: b, onDelete: () => onDeleteCategory(b.categoryId)),
+                if (budgets.isEmpty)
+                  StubCard(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'No categories yet — add one below to start budgeting.',
+                          textAlign: TextAlign.center,
+                          style: StubText.archivo(fontSize: 13, color: ink50),
+                        ),
                       ),
-                  ]),
-                ),
+                    ),
+                  )
+                else
+                  StubCard(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    child: Column(children: [
+                      for (final b in budgets)
+                        StubPressable(
+                          onTap: onCategoryTap == null ? null : () => onCategoryTap!(b),
+                          child: _BudgetRow(budget: b, onDelete: () => onDeleteCategory(b.categoryId)),
+                        ),
+                    ]),
+                  ),
                 const SizedBox(height: 14),
                 StubPressable(
                   onTap: onAddCategory,
@@ -107,9 +124,11 @@ class _BudgetRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
     final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
     final line = isDark ? StubColors.lineDark : StubColors.lineLight;
+    final color = categoryColor(categoryColorIndexFor(budget.categoryId, budget.colorIndex), brightness);
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -120,8 +139,24 @@ class _BudgetRow extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(child: Text(budget.name, style: StubText.archivo(fontSize: 14, fontWeight: FontWeight.w600, color: ink))),
-              Text('${(budget.fraction * 100).round()}%', style: StubText.unbounded(fontSize: 13, color: ink)),
+              StubIcon(categoryIconData(budget.icon), size: 18, color: color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  budget.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: StubText.archivo(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: budgetStatusColor(budget.status, brightness) ?? ink,
+                  ),
+                ),
+              ),
+              Text(
+                '${(budget.fraction * 100).round()}%',
+                style: StubText.unbounded(fontSize: 13, color: budgetStatusColor(budget.status, brightness) ?? ink),
+              ),
               IconButton(
                 key: Key('delete-category-${budget.categoryId}'),
                 icon: StubIcon(StubIcons.x, size: 14, color: ink.withValues(alpha: 0.4)),
@@ -130,7 +165,7 @@ class _BudgetRow extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          StubProgressBar(progress: budget.fraction, isWarning: budget.isWarning),
+          StubProgressBar.status(progress: budget.fraction, status: budget.status),
         ],
       ),
     );

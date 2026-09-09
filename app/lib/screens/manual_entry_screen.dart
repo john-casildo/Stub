@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import '../util/currency.dart';
+import '../util/thousands_input_formatter.dart';
 import '../widgets/stub_button.dart';
 import '../widgets/stub_chip.dart';
 import '../widgets/stub_field_row.dart';
@@ -23,6 +25,11 @@ class ManualEntryScreen extends StatefulWidget {
 }
 
 class _ManualEntryScreenState extends State<ManualEntryScreen> {
+  /// Same sanity cap as `AddCategoryScreen`'s limit field — not a
+  /// technical limit, just generous enough for any real transaction
+  /// while catching typos.
+  static const _maxAmount = 10000000000.0;
+
   final _amountController = TextEditingController(text: '0.00');
   final _merchantController = TextEditingController();
   late String _selected = widget.categories.first;
@@ -72,6 +79,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                           controller: _amountController,
                           textAlign: TextAlign.center,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [ThousandsSeparatorInputFormatter()],
                           style: StubText.unbounded(fontSize: 32, color: Colors.white),
                           decoration: InputDecoration(
                             border: InputBorder.none,
@@ -122,7 +130,13 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                 label: 'Save entry',
                 variant: StubButtonVariant.save,
                 onPressed: () {
-                  final amount = double.tryParse(_amountController.text) ?? 0;
+                  final amount = double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0;
+                  if (amount > _maxAmount) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Amount can\'t be more than ${formatCurrency(_maxAmount)}.')),
+                    );
+                    return;
+                  }
                   widget.onSave(amount, _merchantController.text, _selected);
                 },
               ),

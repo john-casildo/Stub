@@ -14,7 +14,8 @@ void main() {
           amount: 18.42,
           categories: const ['Groceries', 'Dining', 'Household'],
           selectedCategory: 'Groceries',
-          sourceLabel: 'Receipt scan · Today',
+          sourceLabel: 'Receipt scan',
+          dateLabel: 'Today',
           onClose: () {},
           onSave: (merchant, amount, category) {
             savedMerchant = merchant;
@@ -26,9 +27,12 @@ void main() {
       ),
     );
     expect(find.text('Corner Market'), findsOneWidget);
+    expect(find.text('Receipt scan'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
 
     await tester.tap(find.text('Dining'));
     await tester.pump();
+    await tester.ensureVisible(find.text('Save changes'));
     await tester.tap(find.text('Save changes'));
     expect(savedMerchant, 'Corner Market');
     expect(savedAmount, 18.42);
@@ -43,7 +47,8 @@ void main() {
           amount: 18.42,
           categories: const ['Groceries'],
           selectedCategory: 'Groceries',
-          sourceLabel: 'Receipt scan · Today',
+          sourceLabel: 'Receipt scan',
+          dateLabel: 'Today',
           onClose: () {},
           onSave: (_, _, _) {},
           onDelete: () {},
@@ -72,7 +77,8 @@ void main() {
           amount: 18.42,
           categories: const ['Groceries'],
           selectedCategory: 'Groceries',
-          sourceLabel: 'Receipt scan · Today',
+          sourceLabel: 'Receipt scan',
+          dateLabel: 'Today',
           onClose: () {},
           onSave: (_, _, _) => saved = true,
           onDelete: () {},
@@ -95,7 +101,8 @@ void main() {
           amount: 18.42,
           categories: const ['Groceries'],
           selectedCategory: 'Groceries',
-          sourceLabel: 'Receipt scan · Today',
+          sourceLabel: 'Receipt scan',
+          dateLabel: 'Today',
           onClose: () {},
           onSave: (_, _, _) => saved = true,
           onDelete: () {},
@@ -120,7 +127,8 @@ void main() {
           amount: 0,
           categories: const ['Groceries'],
           selectedCategory: 'Groceries',
-          sourceLabel: 'Receipt scan · Today',
+          sourceLabel: 'Receipt scan',
+          dateLabel: 'Today',
           onClose: () {},
           onSave: (_, _, _) => saved = true,
           onDelete: () {},

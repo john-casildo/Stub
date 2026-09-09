@@ -38,6 +38,14 @@ class StubColors {
   static const warnDark = Color(0xFFD3A85F);
   static const gradSecondDark = Color(0xFF34F5D0);
 
+  /// Phone bezel — LockScreen's always-dark background (DESIGN.md
+  /// `--phone-body`). Still theme-reactive like every other token here
+  /// (light app theme gets the warm `#1B1712`, dark gets neutral
+  /// near-black `#050505` matching bgDark's family) — it's just always a
+  /// dark bezel regardless of which one applies.
+  static const phoneBodyLight = Color(0xFF1B1712);
+  static const phoneBodyDark = Color(0xFF050505);
+
   /// The one decorative gradient ("the pop") — see DESIGN.md §5 for exactly
   /// which elements this is allowed on. As of DESIGN.md §4/§5, every blue
   /// button uses this too — "never on a button" is no longer the rule.

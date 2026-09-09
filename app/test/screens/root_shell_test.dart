@@ -13,7 +13,9 @@ import 'package:stub/data/transaction_repository.dart';
 import 'package:stub/models/budget_limit.dart';
 import 'package:stub/models/category.dart';
 import 'package:stub/models/transaction.dart';
+import 'package:stub/screens/add_category_screen.dart';
 import 'package:stub/screens/edit_entry_screen.dart';
+import 'package:stub/screens/export_data_screen.dart';
 import 'package:stub/screens/root_shell.dart';
 import 'package:stub/screens/scan_screen.dart';
 import 'package:stub/util/receipt_parser.dart';
@@ -38,6 +40,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
     expect(find.text('RECENT'), findsOneWidget);
@@ -57,6 +62,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -79,6 +87,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -110,6 +121,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -158,6 +172,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -199,6 +216,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -248,8 +268,11 @@ void main() {
     addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_pathProviderChannel, null));
 
+    final categories = FakeCategoryRepository();
+    await categories.create('Groceries');
+
     await tester.pumpWidget(MaterialApp(home: RootShell(
-      categoryRepository: FakeCategoryRepository(),
+      categoryRepository: categories,
       transactionRepository: FakeTransactionRepository(),
       budgetRepository: FakeBudgetRepository(),
       accountLinkService: FakeAccountLinkService(),
@@ -257,6 +280,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -270,6 +296,10 @@ void main() {
     await tester.ensureVisible(find.text('Export data'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Export data'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ExportDataScreen), findsOneWidget);
+    await tester.tap(find.text('Export CSV'));
     await tester.pumpAndSettle();
 
     expect(find.text('Could not export data. Please try again.'), findsOneWidget);
@@ -310,7 +340,15 @@ void main() {
     final transactions = _OffsetPagedFakeTransactionRepository(
       List.generate(
         5,
-        (i) => FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'Merchant $i', amount: 1),
+        (i) => Transaction(
+          id: 'seed-$i',
+          categoryId: groceries.id,
+          merchant: 'Merchant $i',
+          amount: 1,
+          category: 'Groceries',
+          source: TransactionSource.manual,
+          occurredAt: DateTime.now(),
+        ),
       ),
       pageSize: 2,
     );
@@ -326,6 +364,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -342,12 +383,16 @@ void main() {
     // event loop), so the tap that kicks it off has to run inside
     // `runAsync`, which switches to a real zone for its duration. See
     // `exportTransactionsCsv`/`_fetchAllTransactions` in `root_shell.dart`.
+    await tester.ensureVisible(find.text('Export data'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Export data'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ExportDataScreen), findsOneWidget);
     await tester.runAsync(() async {
-      await tester.ensureVisible(find.text('Export data'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Export data'));
-      // Give the fire-and-forget `_exportData()` future — kicked off by the
-      // tap above but not awaited by the widget itself — a real chance to
+      await tester.tap(find.text('Export CSV'));
+      // Give the fire-and-forget export future — kicked off by the tap
+      // above but not awaited by the widget itself — a real chance to
       // run to completion before we move on to read its output.
       await Future<void>.delayed(const Duration(milliseconds: 200));
     });
@@ -372,6 +417,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -413,10 +461,147 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
     expect(find.text('Corner Market'), findsOneWidget);
+  });
+
+  testWidgets("Ledger's RECENT list is capped at 5 transactions", (tester) async {
+    final categories = FakeCategoryRepository();
+    final groceries = await categories.create('Groceries');
+    final transactions = FakeTransactionRepository([
+      for (var i = 0; i < 8; i++)
+        FakeTransactionRepository.sample(categoryId: groceries.id, merchant: 'Merchant $i', amount: 10),
+    ]);
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: transactions,
+      budgetRepository: FakeBudgetRepository(null, categories),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      localPrefs: LocalPrefs(),
+      textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+    )));
+    await tester.pumpAndSettle();
+
+    var shown = 0;
+    for (var i = 0; i < 8; i++) {
+      if (find.text('Merchant $i').evaluate().isNotEmpty) shown++;
+    }
+    expect(shown, 5);
+  });
+
+  testWidgets('RootShell computes the combined OVERALL percentage across every budgeted category', (tester) async {
+    final categories = FakeCategoryRepository();
+    final groceries = await categories.create('Groceries');
+    final transport = await categories.create('Transport');
+
+    final budgets = FakeBudgetRepository([
+      BudgetLimit(
+        id: 'b1', categoryId: groceries.id, name: 'Groceries', spent: 620, limit: 800,
+        periodType: BudgetPeriodType.monthly, periodStart: DateTime.now(),
+      ),
+      BudgetLimit(
+        id: 'b2', categoryId: transport.id, name: 'Transport', spent: 275, limit: 450,
+        periodType: BudgetPeriodType.monthly, periodStart: DateTime.now(),
+      ),
+    ], categories);
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      localPrefs: LocalPrefs(),
+      textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+    )));
+    await tester.pumpAndSettle();
+
+    // Average of each category's own fraction, not weighted by budget
+    // size: (620/800 + 275/450) / 2 = (77.5% + 61.11%) / 2 = 69.3% -> 69%.
+    expect(find.text('OVERALL'), findsOneWidget);
+    expect(find.text('69%'), findsOneWidget);
+  });
+
+  testWidgets('Fires a budget-threshold notification once per category per period, gated on the toggle', (tester) async {
+    final categories = FakeCategoryRepository();
+    final groceries = await categories.create('Groceries');
+    final periodStart = DateTime.now();
+    final budgets = FakeBudgetRepository([
+      BudgetLimit(
+        id: 'b1', categoryId: groceries.id, name: 'Groceries', spent: 92, limit: 100,
+        periodType: BudgetPeriodType.monthly, periodStart: periodStart,
+      ),
+    ], categories);
+    final notifications = FakeNotificationService();
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      localPrefs: LocalPrefs(),
+      textRecognitionService: FakeTextRecognitionService(),
+      notificationService: notifications,
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+    )));
+    await tester.pumpAndSettle();
+
+    expect(notifications.shown, hasLength(1));
+    expect(notifications.shown.single.body, 'Groceries is at 90% of its budget.');
+
+    // Pulling to refresh re-runs the same load/check — must not re-fire
+    // for a tier already notified this period.
+    await tester.fling(find.byType(RefreshIndicator), const Offset(0, 300), 1000);
+    await tester.pumpAndSettle();
+    expect(notifications.shown, hasLength(1));
+  });
+
+  testWidgets('Does not fire a budget-threshold notification when the toggle is off', (tester) async {
+    SharedPreferences.setMockInitialValues({'budget_warnings_enabled': false});
+    final categories = FakeCategoryRepository();
+    final groceries = await categories.create('Groceries');
+    final budgets = FakeBudgetRepository([
+      BudgetLimit(
+        id: 'b1', categoryId: groceries.id, name: 'Groceries', spent: 92, limit: 100,
+        periodType: BudgetPeriodType.monthly, periodStart: DateTime.now(),
+      ),
+    ], categories);
+    final notifications = FakeNotificationService();
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: budgets,
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      localPrefs: LocalPrefs(),
+      textRecognitionService: FakeTextRecognitionService(),
+      notificationService: notifications,
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+    )));
+    await tester.pumpAndSettle();
+
+    expect(notifications.shown, isEmpty);
   });
 
   testWidgets('RootShell shows a loading state, then an error state, on a failing repository', (tester) async {
@@ -429,6 +614,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
 
     // Loading state visible on the very first frame, before the failing future resolves.
@@ -453,6 +641,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Budgets'));
@@ -474,6 +665,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -482,6 +676,36 @@ void main() {
 
     expect(find.text('Add a category first, then log an expense.'), findsOneWidget);
     expect(find.text('tap to type an amount'), findsNothing);
+  });
+
+  testWidgets('Tapping add-category at the 30-category limit shows a snackbar and does not push AddCategoryScreen', (tester) async {
+    final categories = FakeCategoryRepository();
+    for (var i = 0; i < 30; i++) {
+      await categories.create('Category $i');
+    }
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(null, categories),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      localPrefs: LocalPrefs(),
+      textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Budgets'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+ Add a category'));
+    await tester.pumpAndSettle();
+
+    expect(find.text("You've reached the 30 category limit. Delete one to add another."), findsOneWidget);
+    expect(find.byType(AddCategoryScreen), findsNothing);
   });
 
   testWidgets('A failed write shows a friendly message and leaves the modal open', (tester) async {
@@ -497,6 +721,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -542,6 +769,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -602,6 +832,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Budgets'));
@@ -630,6 +863,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -669,6 +905,49 @@ void main() {
     expect(DateTime.now().difference(saved.occurredAt).inMinutes, lessThan(1));
   });
 
+  testWidgets('Tapping an existing transaction shows its real source and date, not the date mislabeled as the source', (tester) async {
+    final categories = FakeCategoryRepository();
+    final groceries = await categories.create('Groceries');
+    final transactions = FakeTransactionRepository([
+      Transaction(
+        id: 't1',
+        categoryId: groceries.id,
+        merchant: 'Corner Market',
+        amount: 18.42,
+        category: 'Groceries',
+        source: TransactionSource.manual,
+        occurredAt: DateTime.now().subtract(const Duration(days: 30)),
+      ),
+    ]);
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: transactions,
+      budgetRepository: FakeBudgetRepository(null, categories),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      localPrefs: LocalPrefs(),
+      textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Corner Market'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(EditEntryScreen), findsOneWidget);
+    // The real source label, not a "M/D"-shaped date string standing in
+    // for it (the original bug: sourceLabel was wired to transaction
+    // .dateLabel instead of the actual source).
+    expect(find.text('Manual'), findsOneWidget);
+    // The date now has its own row instead of being lost.
+    final expectedDate = DateTime.now().subtract(const Duration(days: 30));
+    expect(find.text('${expectedDate.month}/${expectedDate.day}'), findsOneWidget);
+  });
+
   testWidgets('Scanning a receipt with zero categories shows a snackbar and does not push EditEntryScreen', (tester) async {
     await tester.pumpWidget(MaterialApp(home: RootShell(
       categoryRepository: FakeCategoryRepository(),
@@ -679,6 +958,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -708,6 +990,9 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       localPrefs: LocalPrefs(),
       textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
     )));
     await tester.pumpAndSettle();
 
@@ -752,7 +1037,8 @@ class _FailingCategoryRepository implements CategoryRepository {
   Future<List<Category>> list() async => throw Exception('boom');
 
   @override
-  Future<Category> create(String name, {String? currencyCode}) async => throw UnimplementedError();
+  Future<Category> create(String name, {String? currencyCode, String icon = 'tag', int? colorIndex}) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> delete(String id) async => throw UnimplementedError();
@@ -773,7 +1059,8 @@ class _RestrictingCategoryRepository implements CategoryRepository {
   Future<List<Category>> list() => _categories.list();
 
   @override
-  Future<Category> create(String name, {String? currencyCode}) => _categories.create(name, currencyCode: currencyCode);
+  Future<Category> create(String name, {String? currencyCode, String icon = 'tag', int? colorIndex}) =>
+      _categories.create(name, currencyCode: currencyCode, icon: icon, colorIndex: colorIndex);
 
   @override
   Future<void> delete(String id) async {

@@ -12,7 +12,7 @@ void main() {
       MaterialApp(
         home: LedgerScreen(
           monthLabel: 'August',
-          categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue)],
+          categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue, icon: 'tag')],
           recent: [
             Transaction(id: 't1', categoryId: 'c1', merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, occurredAt: DateTime.now()),
           ],
@@ -39,7 +39,7 @@ void main() {
       MaterialApp(
         home: LedgerScreen(
           monthLabel: 'August',
-          categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: null, color: Colors.blue)],
+          categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: null, color: Colors.blue, icon: 'tag')],
           recent: const [],
           activeNavIndex: 0,
           navItems: const [
@@ -61,7 +61,7 @@ void main() {
     var refreshed = false;
     await tester.pumpWidget(MaterialApp(home: LedgerScreen(
       monthLabel: 'August',
-      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue)],
+      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue, icon: 'tag')],
       recent: [
         Transaction(id: 't1', categoryId: 'c1', merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, occurredAt: DateTime.now()),
       ],
@@ -89,7 +89,7 @@ void main() {
     var tapped = false;
     await tester.pumpWidget(MaterialApp(home: LedgerScreen(
       monthLabel: 'August',
-      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue)],
+      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue, icon: 'tag')],
       recent: [
         Transaction(id: 't1', categoryId: 'c1', merchant: 'Corner Market', amount: 18.42, category: 'Groceries', source: TransactionSource.receipt, occurredAt: DateTime.now()),
       ],
@@ -113,7 +113,7 @@ void main() {
     String? tappedId;
     await tester.pumpWidget(MaterialApp(home: LedgerScreen(
       monthLabel: 'August',
-      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue)],
+      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue, icon: 'tag')],
       recent: const [],
       activeNavIndex: 0,
       navItems: const [
@@ -130,5 +130,68 @@ void main() {
 
     await tester.tap(find.text('Groceries'));
     expect(tappedId, 'c1');
+  });
+
+  testWidgets('Omits the OVERALL hero when overallFraction is null', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: LedgerScreen(
+      monthLabel: 'August',
+      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: null, color: Colors.blue, icon: 'tag')],
+      recent: const [],
+      activeNavIndex: 0,
+      navItems: const [
+        StubNavItem(icon: StubIcons.home, label: 'Home'),
+        StubNavItem(icon: StubIcons.chartBar, label: 'Budgets'),
+        StubNavItem(icon: StubIcons.userCircle, label: 'Profile'),
+      ],
+      onNavTap: (_) {},
+      onScanTap: () {},
+      onAddManualEntry: () {},
+      onRefresh: () async {},
+    )));
+
+    expect(find.text('OVERALL'), findsNothing);
+  });
+
+  testWidgets('Shows the OVERALL hero with the combined percentage when set', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: LedgerScreen(
+      monthLabel: 'August',
+      categories: const [CategorySpend(categoryId: 'c1', name: 'Groceries', fraction: 0.708, color: Colors.blue, icon: 'tag')],
+      recent: const [],
+      activeNavIndex: 0,
+      navItems: const [
+        StubNavItem(icon: StubIcons.home, label: 'Home'),
+        StubNavItem(icon: StubIcons.chartBar, label: 'Budgets'),
+        StubNavItem(icon: StubIcons.userCircle, label: 'Profile'),
+      ],
+      onNavTap: (_) {},
+      onScanTap: () {},
+      onAddManualEntry: () {},
+      onRefresh: () async {},
+      overallFraction: 0.72,
+    )));
+
+    expect(find.text('OVERALL'), findsOneWidget);
+    expect(find.text('72%'), findsOneWidget);
+  });
+
+  testWidgets('Shows empty-state messages when there are no categories or transactions', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: LedgerScreen(
+      monthLabel: 'August',
+      categories: const [],
+      recent: const [],
+      activeNavIndex: 0,
+      navItems: const [
+        StubNavItem(icon: StubIcons.home, label: 'Home'),
+        StubNavItem(icon: StubIcons.chartBar, label: 'Budgets'),
+        StubNavItem(icon: StubIcons.userCircle, label: 'Profile'),
+      ],
+      onNavTap: (_) {},
+      onScanTap: () {},
+      onAddManualEntry: () {},
+      onRefresh: () async {},
+    )));
+
+    expect(find.textContaining('No categories yet'), findsOneWidget);
+    expect(find.textContaining('No transactions yet'), findsOneWidget);
   });
 }

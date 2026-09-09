@@ -44,6 +44,8 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       textRecognitionService: FakeTextRecognitionService(),
       deviceAuthService: FakeDeviceAuthService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      notificationService: FakeNotificationService(),
     ));
     await tester.pump();
 
@@ -52,6 +54,34 @@ void main() {
     await tester.tap(find.text('Unlock'));
     await tester.pumpAndSettle();
 
+    expect(find.text('RECENT'), findsOneWidget);
+  });
+
+  testWidgets('Turning lockEnabledNotifier off skips the lock screen entirely', (tester) async {
+    SharedPreferences.setMockInitialValues({'has_seen_backup_prompt': true});
+    final lockEnabledNotifier = ValueNotifier<bool>(true);
+
+    await tester.pumpWidget(StubApp(
+      categoryRepository: FakeCategoryRepository(),
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      localPrefs: LocalPrefs(),
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      textRecognitionService: FakeTextRecognitionService(),
+      deviceAuthService: FakeDeviceAuthService(),
+      lockEnabledNotifier: lockEnabledNotifier,
+      notificationService: FakeNotificationService(),
+    ));
+    await tester.pump();
+
+    expect(find.text('Stub is locked'), findsOneWidget);
+
+    lockEnabledNotifier.value = false;
+    await tester.pumpAndSettle();
+
+    expect(find.text('Stub is locked'), findsNothing);
     expect(find.text('RECENT'), findsOneWidget);
   });
 
@@ -66,6 +96,8 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       textRecognitionService: FakeTextRecognitionService(),
       deviceAuthService: FakeDeviceAuthService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      notificationService: FakeNotificationService(),
     ));
     await tester.pump();
 
@@ -99,6 +131,8 @@ void main() {
         currencyNotifier: ValueNotifier<String>("USD"),
         textRecognitionService: FakeTextRecognitionService(),
         deviceAuthService: FakeDeviceAuthService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      notificationService: FakeNotificationService(),
       ));
       await tester.pump();
 
@@ -126,6 +160,8 @@ void main() {
       currencyNotifier: ValueNotifier<String>("USD"),
       textRecognitionService: FakeTextRecognitionService(),
       deviceAuthService: FakeDeviceAuthService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      notificationService: FakeNotificationService(),
     ));
 
     expect(

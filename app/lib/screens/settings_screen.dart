@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/local_prefs.dart';
+import '../data/notification_service.dart';
 import '../util/currency.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
@@ -9,15 +10,20 @@ import '../widgets/stub_chip.dart';
 import '../widgets/stub_icon.dart';
 import '../widgets/stub_loading_indicator.dart';
 
-/// Settings screen — theme picker, notification toggles (not yet wired to
-/// real notifications), data export/delete slots (wired in Tasks 5/6), and
-/// a placeholder account-deletion row.
+/// Settings screen — theme picker, notification toggles (both real:
+/// "Budget limit warnings" via real-time local notifications, "Weekly
+/// summary" via a background task), data export/delete slots, and a
+/// placeholder account-deletion row.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
     required this.localPrefs,
     required this.themeModeNotifier,
     required this.currencyNotifier,
+    required this.lockEnabledNotifier,
+    required this.lockSupported,
+    required this.notificationService,
+    required this.onWeeklySummaryToggled,
     required this.onClose,
     required this.onExportData,
     required this.onDeleteAllData,
@@ -26,6 +32,16 @@ class SettingsScreen extends StatefulWidget {
   final LocalPrefs localPrefs;
   final ValueNotifier<ThemeMode> themeModeNotifier;
   final ValueNotifier<String> currencyNotifier;
+  final ValueNotifier<bool> lockEnabledNotifier;
+  /// Whether this device has any biometric/passcode enrolled at all —
+  /// the Face ID/passcode toggle is hidden entirely when false.
+  final bool lockSupported;
+  final NotificationService notificationService;
+  /// Registers/cancels the real weekly-summary background task —
+  /// separate from `NotificationService` because it drives `workmanager`
+  /// directly, which (unlike `NotificationService`) has no fake and
+  /// can't run inside a widget test.
+  final Future<void> Function(bool enabled) onWeeklySummaryToggled;
   final VoidCallback onClose;
   final VoidCallback onExportData;
   final VoidCallback onDeleteAllData;
@@ -39,6 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _currencyCode;
   bool? _budgetWarnings;
   bool? _weeklySummary;
+  bool? _lockEnabled;
 
   @override
   void initState() {
@@ -57,11 +74,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String currency = CurrencyConfig.code;
     bool warnings = true;
     bool summary = true;
+    bool lock = true;
     try {
       theme = await widget.localPrefs.themeMode();
       currency = await widget.localPrefs.currencyCode();
       warnings = await widget.localPrefs.budgetWarningsEnabled();
       summary = await widget.localPrefs.weeklySummaryEnabled();
+      lock = await widget.localPrefs.lockEnabled();
     } catch (_) {
       // Fall through with the defaults above — still lets the screen render.
     }
@@ -71,6 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _currencyCode = currency;
       _budgetWarnings = warnings;
       _weeklySummary = summary;
+      _lockEnabled = lock;
     });
   }
 
@@ -182,13 +202,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   if (code != null) _setCurrencyCode(code);
                 },
               ),
+              if (widget.lockSupported) ...[
+                const SizedBox(height: 24),
+                Text('SECURITY', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
+                const SizedBox(height: 10),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Require Face ID / Passcode', style: StubText.archivo(fontSize: 14, color: ink)),
+                  value: _lockEnabled ?? true,
+                  activeThumbColor: (isDark ? StubColors.goodDark : StubColors.goodLight),
+                  onChanged: (value) async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    setState(() => _lockEnabled = value);
+                    widget.lockEnabledNotifier.value = value;
+                    try {
+                      await widget.localPrefs.setLockEnabled(value);
+                    } catch (_) {
+                      if (mounted) {
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Could not save that setting. Please try again.')),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
               const SizedBox(height: 24),
               Text('NOTIFICATIONS', style: StubText.archivo(fontSize: 11, letterSpacing: 0.7, color: ink50)),
-              const SizedBox(height: 4),
-              Text(
-                "These toggles are not yet wired up — they don't do anything today.",
-                style: StubText.archivo(fontSize: 12, color: ink50),
-              ),
               const SizedBox(height: 10),
               SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
@@ -204,6 +244,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (mounted) {
                       messenger.showSnackBar(
                         const SnackBar(content: Text('Could not save that setting. Please try again.')),
+                      );
+                    }
+                    return;
+                  }
+                  if (value) {
+                    final granted = await widget.notificationService.requestPermission();
+                    if (!granted && mounted) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text("Notifications are blocked in your device settings — enable them there to get alerts."),
+                        ),
                       );
                     }
                   }
@@ -225,6 +276,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SnackBar(content: Text('Could not save that setting. Please try again.')),
                       );
                     }
+                    return;
+                  }
+                  if (value) {
+                    final granted = await widget.notificationService.requestPermission();
+                    if (!granted && mounted) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text("Notifications are blocked in your device settings — enable them there to get alerts."),
+                        ),
+                      );
+                    }
+                  }
+                  try {
+                    await widget.onWeeklySummaryToggled(value);
+                  } catch (_) {
+                    // Best-effort — the preference itself already saved
+                    // above; a registration failure just means the
+                    // background task doesn't (yet) reflect it.
                   }
                 },
               ),

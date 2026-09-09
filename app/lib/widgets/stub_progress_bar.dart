@@ -1,22 +1,32 @@
 import 'package:flutter/material.dart';
+import '../theme/budget_status.dart';
 import '../theme/colors.dart';
 
-/// Linear budget progress bar. Gradient fill for the normal state; solid
-/// `--warn` amber for the over-budget state — DESIGN.md §5: "a warning
-/// shouldn't be dressed up decoratively."
+/// Linear budget progress bar. Gradient fill for the normal state; a flat
+/// status color (`--warn` amber, or `--danger` red once at/over the
+/// limit) for the other two — DESIGN.md §5: "a warning shouldn't be
+/// dressed up decoratively."
 class StubProgressBar extends StatelessWidget {
-  const StubProgressBar({super.key, required this.progress, this.isWarning = false, this.height = 7});
+  const StubProgressBar({super.key, required this.progress, this.isWarning = false, this.height = 7})
+      : status = null;
+
+  /// Drives the fill color directly from a [BudgetStatus] instead of the
+  /// legacy [isWarning] bool — lets a caller distinguish the new `danger`
+  /// (at/over budget) tier from `warning` (approaching it).
+  const StubProgressBar.status({super.key, required this.progress, required this.status, this.height = 7})
+      : isWarning = false;
 
   final double progress;
   final bool isWarning;
   final double height;
+  final BudgetStatus? status;
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final isDark = brightness == Brightness.dark;
     final track = isDark ? StubColors.surfaceAltDark : StubColors.surfaceAltLight;
-    final warnColor = isDark ? StubColors.warnDark : StubColors.warnLight;
+    final statusColor = budgetStatusColor(status ?? (isWarning ? BudgetStatus.warning : BudgetStatus.normal), brightness);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -35,8 +45,8 @@ class StubProgressBar extends StatelessWidget {
                   width: fillWidth,
                   height: height,
                   decoration: BoxDecoration(
-                    color: isWarning ? warnColor : null,
-                    gradient: isWarning ? null : StubColors.gradPop(brightness),
+                    color: statusColor,
+                    gradient: statusColor == null ? StubColors.gradPop(brightness) : null,
                     borderRadius: BorderRadius.circular(100),
                   ),
                 ),

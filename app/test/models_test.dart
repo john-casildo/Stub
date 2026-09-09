@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:stub/models/budget_limit.dart';
 import 'package:stub/models/category.dart';
 import 'package:stub/models/transaction.dart';
+import 'package:stub/theme/budget_status.dart';
 
 void main() {
   test('Category maps to/from a Postgres row', () {
@@ -9,13 +10,29 @@ void main() {
     expect(category.id, 'c1');
     expect(category.name, 'Groceries');
     expect(category.currencyCode, isNull);
-    expect(category.toInsertRow('u1'), {'user_id': 'u1', 'name': 'Groceries', 'currency_code': null});
+    expect(category.icon, 'tag');
+    expect(category.colorIndex, isNull);
+    expect(category.toInsertRow('u1'), {
+      'user_id': 'u1',
+      'name': 'Groceries',
+      'currency_code': null,
+      'icon': 'tag',
+      'color_index': null,
+    });
   });
 
   test('Category carries an optional currency override', () {
     final category = Category.fromRow({'id': 'c1', 'name': 'Groceries', 'currency_code': 'CRC'});
     expect(category.currencyCode, 'CRC');
     expect(category.toInsertRow('u1')['currency_code'], 'CRC');
+  });
+
+  test('Category carries an icon and color index from a Postgres row', () {
+    final category = Category.fromRow({'id': 'c1', 'name': 'Groceries', 'icon': 'cart', 'color_index': 2});
+    expect(category.icon, 'cart');
+    expect(category.colorIndex, 2);
+    expect(category.toInsertRow('u1')['icon'], 'cart');
+    expect(category.toInsertRow('u1')['color_index'], 2);
   });
 
   test('BudgetPeriodType round-trips through its wire value', () {
@@ -103,5 +120,35 @@ void main() {
       periodStart: DateTime(2026, 8, 1),
     );
     expect(overBudget.isWarning, isTrue);
+  });
+
+  test('BudgetLimit.status/isOverBudget distinguish warning from over-budget', () {
+    final normal = BudgetLimit(
+      id: 'b1', categoryId: 'c1', name: 'Groceries', spent: 100, limit: 300,
+      periodType: BudgetPeriodType.monthly, periodStart: DateTime(2026, 8, 1),
+    );
+    expect(normal.isOverBudget, isFalse);
+    expect(normal.status, BudgetStatus.normal);
+
+    final warning = BudgetLimit(
+      id: 'b2', categoryId: 'c2', name: 'Dining out', spent: 96, limit: 100,
+      periodType: BudgetPeriodType.monthly, periodStart: DateTime(2026, 8, 1),
+    );
+    expect(warning.isOverBudget, isFalse);
+    expect(warning.status, BudgetStatus.warning);
+
+    final overBudget = BudgetLimit(
+      id: 'b3', categoryId: 'c3', name: 'Entertainment', spent: 120, limit: 100,
+      periodType: BudgetPeriodType.monthly, periodStart: DateTime(2026, 8, 1),
+    );
+    expect(overBudget.isOverBudget, isTrue);
+    expect(overBudget.status, BudgetStatus.danger);
+  });
+
+  test('budgetStatusForFraction handles null (no budget) as normal', () {
+    expect(budgetStatusForFraction(null), BudgetStatus.normal);
+    expect(budgetStatusForFraction(0.5), BudgetStatus.normal);
+    expect(budgetStatusForFraction(0.9), BudgetStatus.warning);
+    expect(budgetStatusForFraction(1.0), BudgetStatus.danger);
   });
 }

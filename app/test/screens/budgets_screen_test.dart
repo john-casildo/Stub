@@ -41,6 +41,29 @@ void main() {
     expect(find.text('+ Add a category'), findsOneWidget);
   });
 
+  testWidgets('Shows an empty-state message when there are no categories', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BudgetsScreen(
+          monthLabel: 'August',
+          budgets: const [],
+          activeNavIndex: 1,
+          navItems: const [
+            StubNavItem(icon: StubIcons.home, label: 'Home'),
+            StubNavItem(icon: StubIcons.chartBar, label: 'Budgets'),
+            StubNavItem(icon: StubIcons.userCircle, label: 'Profile'),
+          ],
+          onNavTap: (_) {},
+          onScanTap: () {},
+          onAddCategory: () {},
+          onDeleteCategory: (_) {},
+          onRefresh: () async {},
+        ),
+      ),
+    );
+    expect(find.textContaining('No categories yet'), findsOneWidget);
+  });
+
   testWidgets('BudgetsScreen calls onDeleteCategory with the tapped row\'s categoryId', (tester) async {
     String? deletedId;
     await tester.pumpWidget(

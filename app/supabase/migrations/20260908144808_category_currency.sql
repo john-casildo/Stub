@@ -21,12 +21,12 @@ select
   b.user_id,
   b.category_id,
   c.name as category_name,
-  c.currency_code,
   b.limit_amount,
   b.period_type,
   b.period_start,
   b.period_end,
-  coalesce(sum(t.amount), 0) as spent
+  coalesce(sum(t.amount), 0) as spent,
+  c.currency_code
 from public.budgets b
 join public.categories c on c.id = b.category_id
 left join public.transactions t

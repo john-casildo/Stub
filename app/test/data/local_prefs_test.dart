@@ -58,4 +58,30 @@ void main() {
     await prefs.setLocaleCode(null);
     expect(await prefs.localeCode(), isNull);
   });
+
+  test('lockEnabled defaults to true, then persists the set value', () async {
+    final prefs = LocalPrefs();
+    expect(await prefs.lockEnabled(), isTrue);
+
+    await prefs.setLockEnabled(false);
+    expect(await prefs.lockEnabled(), isFalse);
+  });
+
+  test('notifiedThresholdFor defaults to null, then persists per category+period, independently', () async {
+    final prefs = LocalPrefs();
+    final periodA = DateTime(2026, 9, 1);
+    final periodB = DateTime(2026, 10, 1);
+
+    expect(await prefs.notifiedThresholdFor('c1', periodA), isNull);
+
+    await prefs.setNotifiedThresholdFor('c1', periodA, 0.9);
+    expect(await prefs.notifiedThresholdFor('c1', periodA), 0.9);
+    // A different category, and the same category in a different period
+    // (e.g. after the budget rolled over), are untouched.
+    expect(await prefs.notifiedThresholdFor('c2', periodA), isNull);
+    expect(await prefs.notifiedThresholdFor('c1', periodB), isNull);
+
+    await prefs.setNotifiedThresholdFor('c1', periodA, 1.0);
+    expect(await prefs.notifiedThresholdFor('c1', periodA), 1.0);
+  });
 }

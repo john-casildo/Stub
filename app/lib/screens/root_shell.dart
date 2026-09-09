@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/account_link_service.dart';
 import '../data/budget_repository.dart';
 import '../data/category_repository.dart';
 import '../data/local_prefs.dart';
+import '../data/notification_service.dart';
 import '../data/text_recognition_service.dart';
 import '../data/transaction_repository.dart';
+import '../data/weekly_summary_scheduler.dart';
 import '../models/budget_limit.dart';
 import '../models/category.dart';
 import '../models/category_spend.dart';
@@ -13,6 +16,7 @@ import '../models/transaction.dart';
 import '../theme/category_colors.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
+import '../util/budget_thresholds.dart';
 import '../util/csv_export.dart';
 import '../util/receipt_parser.dart';
 import '../widgets/stub_bottom_nav.dart';
@@ -23,6 +27,7 @@ import 'add_category_screen.dart';
 import 'budgets_screen.dart';
 import 'category_detail_screen.dart';
 import 'edit_entry_screen.dart';
+import 'export_data_screen.dart';
 import 'ledger_screen.dart';
 import 'manual_entry_screen.dart';
 import 'profile_screen.dart';
@@ -55,8 +60,11 @@ class RootShell extends StatefulWidget {
     required this.accountLinkService,
     required this.themeModeNotifier,
     required this.currencyNotifier,
+    required this.lockEnabledNotifier,
+    required this.lockSupported,
     required this.localPrefs,
     required this.textRecognitionService,
+    required this.notificationService,
   });
 
   final CategoryRepository categoryRepository;
@@ -65,8 +73,14 @@ class RootShell extends StatefulWidget {
   final AccountLinkService accountLinkService;
   final ValueNotifier<ThemeMode> themeModeNotifier;
   final ValueNotifier<String> currencyNotifier;
+  final ValueNotifier<bool> lockEnabledNotifier;
+  /// Whether this device has any biometric/passcode enrolled at all —
+  /// the Face ID/passcode Settings toggle is hidden entirely when false,
+  /// since there's nothing to require either way.
+  final bool lockSupported;
   final LocalPrefs localPrefs;
   final TextRecognitionService textRecognitionService;
+  final NotificationService notificationService;
 
   @override
   State<RootShell> createState() => _RootShellState();
@@ -93,7 +107,42 @@ class _RootShellState extends State<RootShell> {
     final categories = await widget.categoryRepository.list();
     final transactions = await widget.transactionRepository.list();
     final budgets = await widget.budgetRepository.list();
-    return _ShellData(categories: categories, transactions: transactions, budgets: budgets);
+    final data = _ShellData(categories: categories, transactions: transactions, budgets: budgets);
+    // Fire-and-forget: runs after every load (initial mount and every
+    // post-write reload) but must never hold up rendering, and a failure
+    // here (permission denied, a broken local-prefs read/write) must
+    // never break data loading itself.
+    unawaited(_checkBudgetNotifications(data));
+    return data;
+  }
+
+  /// Checks every budgeted category against `budgetNotificationThresholds`
+  /// and fires a local notification for the highest newly-crossed tier,
+  /// gated on the "Budget limit warnings" toggle and on not having
+  /// already notified that tier this budget period (persisted via
+  /// `LocalPrefs`, keyed by category + period start, so it survives app
+  /// restarts and resets naturally once the period rolls over).
+  Future<void> _checkBudgetNotifications(_ShellData data) async {
+    try {
+      if (!await widget.localPrefs.budgetWarningsEnabled()) return;
+    } catch (_) {
+      return;
+    }
+    for (final budget in data.budgets) {
+      if (budget.limit <= 0) continue;
+      try {
+        final alreadyNotified = await widget.localPrefs.notifiedThresholdFor(budget.categoryId, budget.periodStart);
+        final threshold = highestNewlyCrossedThreshold(budget.fraction, alreadyNotified);
+        if (threshold == null) continue;
+        await widget.localPrefs.setNotifiedThresholdFor(budget.categoryId, budget.periodStart, threshold);
+        await widget.notificationService.show(
+          title: 'Budget alert',
+          body: budgetThresholdMessage(budget.name, threshold),
+        );
+      } catch (_) {
+        // Best-effort per category — one failure shouldn't skip the rest.
+      }
+    }
   }
 
   void _reload() => setState(() {
@@ -108,6 +157,20 @@ class _RootShellState extends State<RootShell> {
       if (budget.categoryId == categoryId) return budget.fraction;
     }
     return null;
+  }
+
+  /// Average of every budgeted category's own fraction, unweighted by
+  /// budget size. Deliberately not total-spent÷total-limit: that
+  /// weighting let one huge-limit, low-spend category dominate the
+  /// denominator and drag the combined figure toward 0% even when
+  /// another category was well over its own budget — a real, confirmed
+  /// case, not a hypothetical. Null when no category has a budget at all
+  /// (nothing to average), matching `_fractionFor`'s "no budget"
+  /// convention.
+  double? _overallFraction(_ShellData data) {
+    if (data.budgets.isEmpty) return null;
+    final total = data.budgets.fold<double>(0, (sum, b) => sum + b.fraction);
+    return (total / data.budgets.length).clamp(0.0, 1.2);
   }
 
   String? _currencyCodeFor(_ShellData data, String categoryId) {
@@ -170,12 +233,8 @@ class _RootShellState extends State<RootShell> {
         amount: parsed.amount ?? 0,
         categories: [for (final c in categories) c.name],
         selectedCategory: categories.first.name,
-        sourceLabel: switch (source) {
-          TransactionSource.receipt => 'Receipt scan',
-          TransactionSource.paymentApp => 'Payment app scan',
-          TransactionSource.bankScreenshot => 'Bank screenshot scan',
-          TransactionSource.manual => 'Manual',
-        },
+        sourceLabel: transactionSourceLabel(source),
+        dateLabel: transactionDateLabel(parsed.occurredAt ?? DateTime.now()),
         onClose: () => Navigator.of(context).pop(),
         onSave: (merchant, amount, categoryName) => _guardedWrite(() async {
           final category = categories.firstWhere((c) => c.name == categoryName);
@@ -200,7 +259,8 @@ class _RootShellState extends State<RootShell> {
         amount: transaction.amount,
         categories: [for (final c in categories) c.name],
         selectedCategory: transaction.category,
-        sourceLabel: transaction.dateLabel,
+        sourceLabel: transaction.sourceLabel,
+        dateLabel: transaction.dateLabel,
         onClose: () => Navigator.of(context).pop(),
         onSave: (merchant, amount, category) => _guardedWrite(() async {
           final selectedCategory = categories.firstWhere((c) => c.name == category);
@@ -225,15 +285,22 @@ class _RootShellState extends State<RootShell> {
   /// on `BudgetsScreen` — every transaction saved under [categoryId],
   /// reusing `_openEditEntry` for the tap-through so correcting an entry
   /// works the same way it does everywhere else.
-  void _openCategoryDetail(String categoryId, String categoryName, _ShellData data) {
+  void _openCategoryDetail(String categoryId, String categoryName, _ShellData data, Brightness brightness) {
+    final category = data.categories.where((c) => c.id == categoryId);
+    final icon = category.isNotEmpty ? category.first.icon : 'tag';
+    final colorIndex = category.isNotEmpty ? category.first.colorIndex : null;
+    final budget = data.budgets.where((b) => b.categoryId == categoryId);
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => CategoryDetailScreen(
         categoryName: categoryName,
+        icon: icon,
+        color: categoryColor(categoryColorIndexFor(categoryId, colorIndex), brightness),
         transactions: data.transactions.where((t) => t.categoryId == categoryId).toList(),
         onClose: () => Navigator.of(context).pop(),
         onTransactionTap: (t) => _openEditEntry(t, data.categories),
         fraction: _fractionFor(data, categoryId),
         currencyCode: _currencyCodeFor(data, categoryId),
+        limit: budget.isNotEmpty ? budget.first.limit : null,
       ),
     ));
   }
@@ -244,8 +311,12 @@ class _RootShellState extends State<RootShell> {
         localPrefs: widget.localPrefs,
         themeModeNotifier: widget.themeModeNotifier,
         currencyNotifier: widget.currencyNotifier,
+        lockEnabledNotifier: widget.lockEnabledNotifier,
+        lockSupported: widget.lockSupported,
+        notificationService: widget.notificationService,
+        onWeeklySummaryToggled: (enabled) => enabled ? scheduleWeeklySummary() : cancelWeeklySummary(),
         onClose: () => Navigator.of(context).pop(),
-        onExportData: _exportData,
+        onExportData: () => _openExportData(data),
         onDeleteAllData: () => _deleteAllData(data),
       ),
     ));
@@ -268,14 +339,44 @@ class _RootShellState extends State<RootShell> {
     return all;
   }
 
+  /// Fetches the full transaction list, then pushes `ExportDataScreen` so
+  /// the user can narrow the export to a month/set of categories instead
+  /// of always exporting everything with no way to scope it down.
+  Future<void> _openExportData(_ShellData data) async {
+    List<Transaction> transactions;
+    try {
+      transactions = await _fetchAllTransactions();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not load data to export. Please try again.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ExportDataScreen(
+        transactions: transactions,
+        categoryNames: [for (final c in data.categories) c.name],
+        onClose: () => Navigator.of(context).pop(),
+        onExport: (month, categoryNames) => _performExport(transactions, month, categoryNames),
+      ),
+    ));
+  }
+
   /// `exportTransactionsCsv` does real I/O (temp file write + OS share
   /// sheet) and can fail — unlike every other write in this file, it's
   /// not a Postgrest call, so it doesn't go through `_guardedWrite`; a
   /// plain try/catch + snackbar is the right shape here.
-  Future<void> _exportData() async {
+  Future<void> _performExport(List<Transaction> transactions, ExportMonth? month, Set<String> categoryNames) async {
+    final filtered = transactions
+        .where((t) => categoryNames.contains(t.category))
+        .where((t) => month == null || month.matches(t.occurredAt))
+        .toList();
     try {
-      final transactions = await _fetchAllTransactions();
-      await exportTransactionsCsv(transactions);
+      await exportTransactionsCsv(filtered);
+      if (mounted) Navigator.of(context).pop();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -337,12 +438,30 @@ class _RootShellState extends State<RootShell> {
     }
   }
 
-  void _openAddCategory() {
+  /// A soft cap on how many categories a user can have — past a certain
+  /// point the category picker (chips/dropdowns throughout the app)
+  /// stops being usable. 30 is generous enough for real budgets with a
+  /// dozen+ categories while still catching a runaway list.
+  static const _maxCategories = 30;
+
+  void _openAddCategory(List<Category> categories) {
+    if (categories.length >= _maxCategories) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("You've reached the $_maxCategories category limit. Delete one to add another.")),
+      );
+      return;
+    }
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => AddCategoryScreen(
         onClose: () => Navigator.of(context).pop(),
-        onSave: (name, limitAmount, periodType, periodStart, periodEnd, currencyCode) => _guardedWrite(() async {
-          final category = await widget.categoryRepository.create(name, currencyCode: currencyCode);
+        onSave: (name, limitAmount, periodType, periodStart, periodEnd, currencyCode, icon, colorIndex) =>
+            _guardedWrite(() async {
+          final category = await widget.categoryRepository.create(
+            name,
+            currencyCode: currencyCode,
+            icon: icon,
+            colorIndex: colorIndex,
+          );
           try {
             await widget.budgetRepository.create(
               categoryId: category.id,
@@ -428,7 +547,8 @@ class _RootShellState extends State<RootShell> {
     return FutureBuilder<_ShellData>(
       future: _dataFuture,
       builder: (context, snapshot) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final brightness = Theme.of(context).brightness;
+        final isDark = brightness == Brightness.dark;
         final bg = isDark ? StubColors.bgDark : StubColors.bgLight;
         final ink = isDark ? StubColors.inkDark : StubColors.inkLight;
 
@@ -472,10 +592,10 @@ class _RootShellState extends State<RootShell> {
             navItems: _navItems,
             onNavTap: (i) => setState(() => _tabIndex = i),
             onScanTap: () => _openScan(data.transactions),
-            onAddCategory: _openAddCategory,
+            onAddCategory: () => _openAddCategory(data.categories),
             onDeleteCategory: _deleteCategory,
             onRefresh: _handleRefresh,
-            onCategoryTap: (b) => _openCategoryDetail(b.categoryId, b.name, data),
+            onCategoryTap: (b) => _openCategoryDetail(b.categoryId, b.name, data, brightness),
           );
         } else if (_tabIndex == 2) {
           final totalEverTracked = data.transactions.fold<double>(0, (sum, t) => sum + t.amount);
@@ -490,25 +610,28 @@ class _RootShellState extends State<RootShell> {
             onOpenSettings: () => _openSettings(data),
           );
         } else {
-          // CategorySpend (and its per-category color) needs
+          // CategorySpend's per-category color needs
           // Theme.of(context).brightness, which only exists here inside
           // build() — not inside the async _load() above, which runs
           // before any widget tree exists.
-          final brightness = Theme.of(context).brightness;
           final categorySpends = <CategorySpend>[
             for (var i = 0; i < data.categories.length; i++)
               CategorySpend(
                 categoryId: data.categories[i].id,
                 name: data.categories[i].name,
                 fraction: _fractionFor(data, data.categories[i].id),
-                color: categoryColor(i, brightness),
+                color: categoryColor(
+                  categoryColorIndexFor(data.categories[i].id, data.categories[i].colorIndex),
+                  brightness,
+                ),
+                icon: data.categories[i].icon,
               ),
           ];
 
           content = LedgerScreen(
             monthLabel: _monthLabel(),
             categories: categorySpends,
-            recent: data.transactions,
+            recent: data.transactions.take(5).toList(),
             activeNavIndex: _tabIndex,
             navItems: _navItems,
             onNavTap: (i) => setState(() => _tabIndex = i),
@@ -516,7 +639,8 @@ class _RootShellState extends State<RootShell> {
             onAddManualEntry: () => _openManualEntry(data.categories),
             onTransactionTap: (t) => _openEditEntry(t, data.categories),
             onRefresh: _handleRefresh,
-            onCategoryTap: (c) => _openCategoryDetail(c.categoryId, c.name, data),
+            onCategoryTap: (c) => _openCategoryDetail(c.categoryId, c.name, data, brightness),
+            overallFraction: _overallFraction(data),
           );
         }
 

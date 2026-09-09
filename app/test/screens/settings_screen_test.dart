@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
+import 'package:stub/data/fakes.dart';
 import 'package:stub/data/local_prefs.dart';
 import 'package:stub/screens/settings_screen.dart';
 import 'package:stub/widgets/stub_loading_indicator.dart';
@@ -35,6 +36,10 @@ void main() {
       localPrefs: prefs,
       themeModeNotifier: notifier,
       currencyNotifier: ValueNotifier<String>('USD'),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+      onWeeklySummaryToggled: (_) async {},
       onClose: () {},
       onExportData: () {},
       onDeleteAllData: () {},
@@ -52,7 +57,103 @@ void main() {
     expect(await prefs.themeMode(), ThemeMode.dark);
 
     expect(find.text('Budget limit warnings'), findsOneWidget);
-    expect(find.textContaining('not yet'), findsWidgets); // the inert-notifications disclaimer
+    expect(find.text('Weekly summary'), findsOneWidget);
+  });
+
+  testWidgets('Shows the Face ID/passcode toggle when the device supports it, and persists changes', (tester) async {
+    final prefs = LocalPrefs();
+    final lockEnabledNotifier = ValueNotifier<bool>(true);
+
+    await tester.pumpWidget(MaterialApp(home: SettingsScreen(
+      localPrefs: prefs,
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>('USD'),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: lockEnabledNotifier,
+      lockSupported: true,
+      onWeeklySummaryToggled: (_) async {},
+      onClose: () {},
+      onExportData: () {},
+      onDeleteAllData: () {},
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Require Face ID / Passcode'), findsOneWidget);
+
+    await tester.tap(find.text('Require Face ID / Passcode'));
+    await tester.pump();
+
+    expect(lockEnabledNotifier.value, isFalse);
+    expect(await prefs.lockEnabled(), isFalse);
+  });
+
+  testWidgets('Hides the Face ID/passcode toggle when the device has nothing enrolled', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: SettingsScreen(
+      localPrefs: LocalPrefs(),
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>('USD'),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: false,
+      onWeeklySummaryToggled: (_) async {},
+      onClose: () {},
+      onExportData: () {},
+      onDeleteAllData: () {},
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Require Face ID / Passcode'), findsNothing);
+  });
+
+  testWidgets('Turning on Budget limit warnings requests notification permission', (tester) async {
+    final notifications = FakeNotificationService();
+
+    await tester.pumpWidget(MaterialApp(home: SettingsScreen(
+      localPrefs: LocalPrefs(),
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>('USD'),
+      notificationService: notifications,
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+      onWeeklySummaryToggled: (_) async {},
+      onClose: () {},
+      onExportData: () {},
+      onDeleteAllData: () {},
+    )));
+    await tester.pumpAndSettle();
+
+    // Off then on, to make sure the permission request fires on the
+    // enabling edge, not unconditionally on every toggle change.
+    await tester.tap(find.text('Budget limit warnings'));
+    await tester.pump();
+    expect(notifications.permissionRequested, isFalse);
+
+    await tester.tap(find.text('Budget limit warnings'));
+    await tester.pump();
+    expect(notifications.permissionRequested, isTrue);
+  });
+
+  testWidgets('Shows a message when notification permission is denied', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: SettingsScreen(
+      localPrefs: LocalPrefs(),
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>('USD'),
+      notificationService: FakeNotificationService(permissionGranted: false),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+      onWeeklySummaryToggled: (_) async {},
+      onClose: () {},
+      onExportData: () {},
+      onDeleteAllData: () {},
+    )));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Budget limit warnings'));
+    await tester.pump();
+    await tester.tap(find.text('Budget limit warnings'));
+    await tester.pump();
+
+    expect(find.textContaining('blocked'), findsOneWidget);
   });
 
   testWidgets('SettingsScreen shows the currency picker and persists changes', (tester) async {
@@ -63,6 +164,10 @@ void main() {
       localPrefs: prefs,
       themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
       currencyNotifier: currencyNotifier,
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+      onWeeklySummaryToggled: (_) async {},
       onClose: () {},
       onExportData: () {},
       onDeleteAllData: () {},
@@ -91,6 +196,10 @@ void main() {
       localPrefs: prefs,
       themeModeNotifier: notifier,
       currencyNotifier: ValueNotifier<String>('USD'),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+      onWeeklySummaryToggled: (_) async {},
       onClose: () {},
       onExportData: () {},
       onDeleteAllData: () => deleted = true,
@@ -125,6 +234,10 @@ void main() {
       localPrefs: prefs,
       themeModeNotifier: notifier,
       currencyNotifier: ValueNotifier<String>('USD'),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+      onWeeklySummaryToggled: (_) async {},
       onClose: () => closed = true,
       onExportData: () {},
       onDeleteAllData: () {},
