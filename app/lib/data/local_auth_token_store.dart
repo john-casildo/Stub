@@ -14,4 +14,12 @@ class LocalAuthTokenStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, token);
   }
+
+  /// Drops a token the server has rejected (401), so the next call falls
+  /// back to a fresh anonymous sign-in instead of retrying a dead JWT
+  /// forever.
+  Future<void> deleteToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+  }
 }

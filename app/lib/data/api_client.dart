@@ -27,9 +27,32 @@ class ApiClient {
   final LocalAuthTokenStore tokenStore;
   final http.Client _http;
 
+  /// In-flight anonymous sign-in, shared by every concurrent caller. Without
+  /// this, two calls racing at cold start (e.g. `HttpAccountLinkService`'s
+  /// constructor and `RootShell._load()`) would both find no stored token and
+  /// both `POST /auth/anonymous`, creating two `users` rows — whichever
+  /// `writeToken` landed last silently winning and orphaning the other.
+  Future<String>? _tokenFuture;
+
   Future<String> _ensureToken() async {
     final existing = await tokenStore.readToken();
     if (existing != null) return existing;
+    // Await the store read *before* checking `_tokenFuture`, so the
+    // check-then-fetch sequence is uninterrupted by the async gap above.
+    final inFlight = _tokenFuture;
+    if (inFlight != null) return inFlight;
+    final future = _fetchAndStoreToken();
+    _tokenFuture = future;
+    try {
+      return await future;
+    } finally {
+      // Cleared on success *and* failure, so a failed sign-in doesn't wedge
+      // every later caller onto the same dead future.
+      _tokenFuture = null;
+    }
+  }
+
+  Future<String> _fetchAndStoreToken() async {
     final response = await _http.post(Uri.parse('$baseUrl/auth/anonymous'));
     if (response.statusCode != 201) {
       throw ApiException(response.statusCode, 'anonymous_sign_in_failed', 'Could not start a session');
@@ -40,23 +63,33 @@ class ApiClient {
     return token;
   }
 
-  Future<dynamic> _send(String method, String path, {Map<String, dynamic>? body}) async {
-    final token = await _ensureToken();
-    final uri = Uri.parse('$baseUrl$path');
+  Future<http.Response> _issue(String method, Uri uri, String token, String? encoded) async {
     final headers = {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'};
-    final encoded = body == null ? null : jsonEncode(body);
-    final http.Response response;
     switch (method) {
       case 'GET':
-        response = await _http.get(uri, headers: headers);
+        return _http.get(uri, headers: headers);
       case 'POST':
-        response = await _http.post(uri, headers: headers, body: encoded);
+        return _http.post(uri, headers: headers, body: encoded);
       case 'PATCH':
-        response = await _http.patch(uri, headers: headers, body: encoded);
+        return _http.patch(uri, headers: headers, body: encoded);
       case 'DELETE':
-        response = await _http.delete(uri, headers: headers);
+        return _http.delete(uri, headers: headers);
       default:
         throw ArgumentError('Unsupported method $method');
+    }
+  }
+
+  Future<dynamic> _send(String method, String path, {Map<String, dynamic>? body}) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final encoded = body == null ? null : jsonEncode(body);
+    var response = await _issue(method, uri, await _ensureToken(), encoded);
+    if (response.statusCode == 401) {
+      // The stored JWT is invalid (expired, or its user row is gone). Drop it
+      // and retry the whole request once with a fresh anonymous session.
+      // Exactly one retry — a second 401 falls through to the throw below, so
+      // a genuinely misconfigured server can't spin this forever.
+      await tokenStore.deleteToken();
+      response = await _issue(method, uri, await _ensureToken(), encoded);
     }
     if (response.statusCode >= 400) {
       final decoded = response.body.isEmpty ? null : jsonDecode(response.body) as Map<String, dynamic>?;
