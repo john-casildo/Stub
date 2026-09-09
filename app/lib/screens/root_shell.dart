@@ -57,6 +57,8 @@ class RootShell extends StatefulWidget {
     required this.currencyNotifier,
     required this.localPrefs,
     required this.textRecognitionService,
+    this.initialManualEntryAmount,
+    this.initialManualEntryMerchant,
   });
 
   final CategoryRepository categoryRepository;
@@ -67,6 +69,14 @@ class RootShell extends StatefulWidget {
   final ValueNotifier<String> currencyNotifier;
   final LocalPrefs localPrefs;
   final TextRecognitionService textRecognitionService;
+  /// Set once, by `StubApp`, when the app was opened via a
+  /// `com.stubapp.stub://log-expense` Siri Shortcuts deep link (see
+  /// `util/deep_link.dart`). `StubApp` clears its own pending state
+  /// immediately after passing these along, so they're only ever
+  /// non-null on the one build where they should actually open
+  /// `ManualEntryScreen`.
+  final double? initialManualEntryAmount;
+  final String? initialManualEntryMerchant;
 
   @override
   State<RootShell> createState() => _RootShellState();
@@ -82,6 +92,10 @@ class _RootShellState extends State<RootShell> {
   // it unmounts LedgerScreen/StubProgressRing entirely, made the progress
   // ring restart its fill animation from zero on every single write.
   _ShellData? _lastData;
+  // Guards against re-opening ManualEntryScreen if this widget rebuilds
+  // for an unrelated reason (tab switch, reload) after already consuming
+  // widget.initialManualEntryAmount/Merchant once.
+  bool _consumedPendingManualEntry = false;
 
   @override
   void initState() {
@@ -385,7 +399,7 @@ class _RootShellState extends State<RootShell> {
         _ => 'Something went wrong. Please try again.',
       };
 
-  void _openManualEntry(List<Category> categories) {
+  void _openManualEntry(List<Category> categories, {double? initialAmount, String? initialMerchant}) {
     if (categories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Add a category first, then log an expense.')),
@@ -395,6 +409,8 @@ class _RootShellState extends State<RootShell> {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ManualEntryScreen(
         categories: [for (final c in categories) c.name],
+        initialAmount: initialAmount,
+        initialMerchant: initialMerchant,
         onClose: () => Navigator.of(context).pop(),
         onSave: (amount, merchant, categoryName) => _guardedWrite(() async {
           final category = categories.firstWhere((c) => c.name == categoryName);
@@ -461,6 +477,20 @@ class _RootShellState extends State<RootShell> {
         // showing that last-known-good data rather than replacing the
         // whole screen with a hard error — only the true first load (no
         // data at all yet) surfaces the retry screen above.
+
+        if (!_consumedPendingManualEntry &&
+            (widget.initialManualEntryAmount != null || widget.initialManualEntryMerchant != null)) {
+          _consumedPendingManualEntry = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _openManualEntry(
+                data.categories,
+                initialAmount: widget.initialManualEntryAmount,
+                initialMerchant: widget.initialManualEntryMerchant,
+              );
+            }
+          });
+        }
 
         final Widget content;
 

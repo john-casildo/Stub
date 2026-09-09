@@ -14,6 +14,7 @@ import 'package:stub/models/budget_limit.dart';
 import 'package:stub/models/category.dart';
 import 'package:stub/models/transaction.dart';
 import 'package:stub/screens/edit_entry_screen.dart';
+import 'package:stub/screens/manual_entry_screen.dart';
 import 'package:stub/screens/root_shell.dart';
 import 'package:stub/screens/scan_screen.dart';
 import 'package:stub/util/receipt_parser.dart';
@@ -482,6 +483,39 @@ void main() {
 
     expect(find.text('Add a category first, then log an expense.'), findsOneWidget);
     expect(find.text('tap to type an amount'), findsNothing);
+  });
+
+  testWidgets('A pending initialManualEntryAmount/Merchant opens ManualEntryScreen pre-filled, exactly once', (tester) async {
+    final categories = FakeCategoryRepository();
+    await categories.create('Groceries');
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      localPrefs: LocalPrefs(),
+      textRecognitionService: FakeTextRecognitionService(),
+      initialManualEntryAmount: 12.50,
+      initialManualEntryMerchant: 'Starbucks',
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ManualEntryScreen), findsOneWidget);
+    // ManualEntryScreen renders the "$" prefix and the amount as two
+    // separate pieces (InputDecoration.prefixText vs. the TextField's own
+    // text) — see manual_entry_screen_test.dart's own pre-fill test, which
+    // asserts against '12.50' rather than '$12.50' for the same reason.
+    expect(find.text('12.50'), findsOneWidget);
+    expect(find.text('Starbucks'), findsOneWidget);
+
+    // Closing and pulling to refresh must not re-open it a second time —
+    // the pending value is consumed exactly once.
+    await tester.tap(find.byType(IconButton).first);
+    await tester.pumpAndSettle();
+    expect(find.byType(ManualEntryScreen), findsNothing);
   });
 
   testWidgets('A failed write shows a friendly message and leaves the modal open', (tester) async {
