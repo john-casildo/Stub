@@ -16,8 +16,10 @@ import 'package:stub/models/transaction.dart';
 import 'package:stub/screens/add_category_screen.dart';
 import 'package:stub/screens/edit_entry_screen.dart';
 import 'package:stub/screens/export_data_screen.dart';
+import 'package:stub/screens/manual_entry_screen.dart';
 import 'package:stub/screens/root_shell.dart';
 import 'package:stub/screens/scan_screen.dart';
+import 'package:stub/util/deep_link.dart';
 import 'package:stub/util/receipt_parser.dart';
 import 'package:stub/widgets/stub_bottom_nav.dart';
 import 'package:stub/widgets/stub_loading_indicator.dart';
@@ -706,6 +708,42 @@ void main() {
 
     expect(find.text("You've reached the 30 category limit. Delete one to add another."), findsOneWidget);
     expect(find.byType(AddCategoryScreen), findsNothing);
+  });
+
+  testWidgets('A pending initialManualEntryLink opens ManualEntryScreen pre-filled, exactly once', (tester) async {
+    final categories = FakeCategoryRepository();
+    await categories.create('Groceries');
+
+    await tester.pumpWidget(MaterialApp(home: RootShell(
+      categoryRepository: categories,
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      themeModeNotifier: ValueNotifier(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      localPrefs: LocalPrefs(),
+      textRecognitionService: FakeTextRecognitionService(),
+      notificationService: FakeNotificationService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      lockSupported: true,
+      initialManualEntryLink: const ParsedDeepLink(amount: 12.50, merchant: 'Starbucks'),
+      initialManualEntryToken: 1,
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ManualEntryScreen), findsOneWidget);
+    // ManualEntryScreen renders the "$" prefix and the amount as two
+    // separate pieces (InputDecoration.prefixText vs. the TextField's own
+    // text) — see manual_entry_screen_test.dart's own pre-fill test, which
+    // asserts against '12.50' rather than '$12.50' for the same reason.
+    expect(find.text('12.50'), findsOneWidget);
+    expect(find.text('Starbucks'), findsOneWidget);
+
+    // Closing and pulling to refresh must not re-open it a second time —
+    // the pending value is consumed exactly once.
+    await tester.tap(find.byType(IconButton).first);
+    await tester.pumpAndSettle();
+    expect(find.byType(ManualEntryScreen), findsNothing);
   });
 
   testWidgets('A failed write shows a friendly message and leaves the modal open', (tester) async {

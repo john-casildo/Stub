@@ -6,6 +6,7 @@ import 'package:shared_preferences_platform_interface/shared_preferences_platfor
 import 'package:stub/data/fakes.dart';
 import 'package:stub/data/local_prefs.dart';
 import 'package:stub/main.dart';
+import 'package:stub/screens/manual_entry_screen.dart';
 
 /// A [SharedPreferencesStorePlatform] whose reads/writes always throw, used
 /// to force a real failure through [LocalPrefs] (which wraps the real
@@ -46,6 +47,7 @@ void main() {
       deviceAuthService: FakeDeviceAuthService(),
       lockEnabledNotifier: ValueNotifier<bool>(true),
       notificationService: FakeNotificationService(),
+      deepLinkService: FakeDeepLinkService(),
     ));
     await tester.pump();
 
@@ -73,6 +75,7 @@ void main() {
       deviceAuthService: FakeDeviceAuthService(),
       lockEnabledNotifier: lockEnabledNotifier,
       notificationService: FakeNotificationService(),
+      deepLinkService: FakeDeepLinkService(),
     ));
     await tester.pump();
 
@@ -98,6 +101,7 @@ void main() {
       deviceAuthService: FakeDeviceAuthService(),
       lockEnabledNotifier: ValueNotifier<bool>(true),
       notificationService: FakeNotificationService(),
+      deepLinkService: FakeDeepLinkService(),
     ));
     await tester.pump();
 
@@ -133,6 +137,7 @@ void main() {
         deviceAuthService: FakeDeviceAuthService(),
       lockEnabledNotifier: ValueNotifier<bool>(true),
       notificationService: FakeNotificationService(),
+      deepLinkService: FakeDeepLinkService(),
       ));
       await tester.pump();
 
@@ -162,6 +167,7 @@ void main() {
       deviceAuthService: FakeDeviceAuthService(),
       lockEnabledNotifier: ValueNotifier<bool>(true),
       notificationService: FakeNotificationService(),
+      deepLinkService: FakeDeepLinkService(),
     ));
 
     expect(
@@ -177,4 +183,96 @@ void main() {
       ThemeMode.light,
     );
   });
+
+  testWidgets('A pending deep link opens ManualEntryScreen pre-filled once unlocked', (tester) async {
+    SharedPreferences.setMockInitialValues({'has_seen_backup_prompt': true});
+    final deepLinks = FakeDeepLinkService(
+      initialLink: Uri.parse('com.stubapp.stub://log-expense?amount=12.50&merchant=Starbucks'),
+    );
+    final categories = FakeCategoryRepository();
+    await categories.create('Groceries');
+
+    await tester.pumpWidget(StubApp(
+      categoryRepository: categories,
+      transactionRepository: FakeTransactionRepository(),
+      budgetRepository: FakeBudgetRepository(),
+      accountLinkService: FakeAccountLinkService(),
+      localPrefs: LocalPrefs(),
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+      currencyNotifier: ValueNotifier<String>("USD"),
+      textRecognitionService: FakeTextRecognitionService(),
+      deviceAuthService: FakeDeviceAuthService(),
+      lockEnabledNotifier: ValueNotifier<bool>(true),
+      notificationService: FakeNotificationService(),
+      deepLinkService: deepLinks,
+    ));
+    await tester.pump();
+
+    // Still locked — the link must wait, not open ManualEntryScreen
+    // behind/through the lock screen.
+    expect(find.text('Stub is locked'), findsOneWidget);
+    expect(find.byType(ManualEntryScreen), findsNothing);
+
+    await tester.tap(find.text('Unlock'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ManualEntryScreen), findsOneWidget);
+    expect(find.text('12.50'), findsOneWidget);
+    expect(find.text('Starbucks'), findsOneWidget);
+  });
+
+  testWidgets(
+    'A second, different warm deep link reopens ManualEntryScreen pre-filled with its own values',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({'has_seen_backup_prompt': true});
+      final deepLinks = FakeDeepLinkService();
+      final categories = FakeCategoryRepository();
+      await categories.create('Groceries');
+
+      await tester.pumpWidget(StubApp(
+        categoryRepository: categories,
+        transactionRepository: FakeTransactionRepository(),
+        budgetRepository: FakeBudgetRepository(),
+        accountLinkService: FakeAccountLinkService(),
+        localPrefs: LocalPrefs(),
+        themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.system),
+        currencyNotifier: ValueNotifier<String>("USD"),
+        textRecognitionService: FakeTextRecognitionService(),
+        deviceAuthService: FakeDeviceAuthService(),
+        lockEnabledNotifier: ValueNotifier<bool>(true),
+        notificationService: FakeNotificationService(),
+        deepLinkService: deepLinks,
+      ));
+      await tester.pump();
+
+      await tester.tap(find.text('Unlock'));
+      await tester.pumpAndSettle();
+
+      // No pending link yet at launch — plain ledger.
+      expect(find.byType(ManualEntryScreen), findsNothing);
+
+      // First warm link while the app is already running.
+      deepLinks.emit(Uri.parse('com.stubapp.stub://log-expense?amount=5.00&merchant=Cafe%20A'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ManualEntryScreen), findsOneWidget);
+      expect(find.text('5.00'), findsOneWidget);
+      expect(find.text('Cafe A'), findsOneWidget);
+
+      // Close it.
+      await tester.tap(find.byType(IconButton).first);
+      await tester.pumpAndSettle();
+      expect(find.byType(ManualEntryScreen), findsNothing);
+
+      // A second, different warm link later in the same app process must
+      // still be able to reopen ManualEntryScreen — this is exactly the
+      // case a plain one-shot bool guard would permanently block.
+      deepLinks.emit(Uri.parse('com.stubapp.stub://log-expense?amount=8.75&merchant=Cafe%20B'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ManualEntryScreen), findsOneWidget);
+      expect(find.text('8.75'), findsOneWidget);
+      expect(find.text('Cafe B'), findsOneWidget);
+    },
+  );
 }

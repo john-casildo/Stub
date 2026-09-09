@@ -18,6 +18,7 @@ import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../util/budget_thresholds.dart';
 import '../util/csv_export.dart';
+import '../util/deep_link.dart';
 import '../util/receipt_parser.dart';
 import '../widgets/stub_bottom_nav.dart';
 import '../widgets/stub_button.dart';
@@ -65,6 +66,8 @@ class RootShell extends StatefulWidget {
     required this.localPrefs,
     required this.textRecognitionService,
     required this.notificationService,
+    this.initialManualEntryLink,
+    this.initialManualEntryToken,
   });
 
   final CategoryRepository categoryRepository;
@@ -81,6 +84,21 @@ class RootShell extends StatefulWidget {
   final LocalPrefs localPrefs;
   final TextRecognitionService textRecognitionService;
   final NotificationService notificationService;
+  /// Set by `StubApp` when the app has ever received a
+  /// `com.stubapp.stub://log-expense` Siri Shortcuts deep link (see
+  /// `util/deep_link.dart`) — `StubApp` deliberately never clears this
+  /// state (a previous version that cleared it via a postFrameCallback
+  /// had a real race against `RootShell`'s own async data load), so it
+  /// stays non-null across every later rebuild of this same `RootShell`
+  /// instance, not just the one build right after the link arrived.
+  /// [initialManualEntryToken] is what actually distinguishes "a new link
+  /// just arrived" from "the same already-consumed link is still sitting
+  /// in `StubApp`'s state after an unrelated rebuild" (tab switch,
+  /// pull-to-refresh): it's null when there's no pending link, and a
+  /// freshly incremented value each time `StubApp` accepts a new link —
+  /// see `_RootShellState._consumedManualEntryToken`.
+  final ParsedDeepLink? initialManualEntryLink;
+  final int? initialManualEntryToken;
 
   @override
   State<RootShell> createState() => _RootShellState();
@@ -96,6 +114,13 @@ class _RootShellState extends State<RootShell> {
   // it unmounts LedgerScreen/StubProgressRing entirely, made the progress
   // ring restart its fill animation from zero on every single write.
   _ShellData? _lastData;
+  // The `initialManualEntryToken` value already consumed to open
+  // ManualEntryScreen, or null if none has been consumed yet. Comparing
+  // against the token (not a plain bool) is what lets a genuinely new,
+  // different deep link re-open ManualEntryScreen later in the same app
+  // session, while a rebuild that hands back the same already-consumed
+  // token (tab switch, pull-to-refresh) still doesn't re-open it.
+  int? _consumedManualEntryToken;
 
   @override
   void initState() {
@@ -504,7 +529,7 @@ class _RootShellState extends State<RootShell> {
         _ => 'Something went wrong. Please try again.',
       };
 
-  void _openManualEntry(List<Category> categories) {
+  void _openManualEntry(List<Category> categories, {double? initialAmount, String? initialMerchant}) {
     if (categories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Add a category first, then log an expense.')),
@@ -514,6 +539,8 @@ class _RootShellState extends State<RootShell> {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ManualEntryScreen(
         categories: [for (final c in categories) c.name],
+        initialAmount: initialAmount,
+        initialMerchant: initialMerchant,
         onClose: () => Navigator.of(context).pop(),
         onSave: (amount, merchant, categoryName) => _guardedWrite(() async {
           final category = categories.firstWhere((c) => c.name == categoryName);
@@ -581,6 +608,21 @@ class _RootShellState extends State<RootShell> {
         // showing that last-known-good data rather than replacing the
         // whole screen with a hard error — only the true first load (no
         // data at all yet) surfaces the retry screen above.
+
+        if (widget.initialManualEntryToken != null &&
+            widget.initialManualEntryToken != _consumedManualEntryToken) {
+          _consumedManualEntryToken = widget.initialManualEntryToken;
+          final link = widget.initialManualEntryLink;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _openManualEntry(
+                data.categories,
+                initialAmount: link?.amount,
+                initialMerchant: link?.merchant,
+              );
+            }
+          });
+        }
 
         final Widget content;
 

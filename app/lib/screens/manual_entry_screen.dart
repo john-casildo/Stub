@@ -14,11 +14,19 @@ class ManualEntryScreen extends StatefulWidget {
     required this.categories,
     required this.onClose,
     required this.onSave,
+    this.initialAmount,
+    this.initialMerchant,
   });
 
   final List<String> categories;
   final VoidCallback onClose;
   final void Function(double amount, String merchant, String category) onSave;
+  /// Pre-fills the amount/merchant fields — used when this screen is
+  /// opened from a Siri Shortcuts quick-log deep link (see
+  /// `RootShell`'s `initialManualEntryAmount`/`initialManualEntryMerchant`).
+  /// Both null in every other entry point into this screen.
+  final double? initialAmount;
+  final String? initialMerchant;
 
   @override
   State<ManualEntryScreen> createState() => _ManualEntryScreenState();
@@ -30,8 +38,10 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
   /// while catching typos.
   static const _maxAmount = 10000000000.0;
 
-  final _amountController = TextEditingController(text: '0.00');
-  final _merchantController = TextEditingController();
+  late final _amountController = TextEditingController(
+    text: widget.initialAmount == null ? '0.00' : widget.initialAmount!.toStringAsFixed(2),
+  );
+  late final _merchantController = TextEditingController(text: widget.initialMerchant ?? '');
   late String _selected = widget.categories.first;
 
   @override

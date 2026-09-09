@@ -77,8 +77,10 @@ void main() {
   });
 
   test('amount is null when missing or malformed, not an error', () {
-    expect(parseDeepLink(Uri.parse('com.stubapp.stub://log-expense')).let((r) => r!.amount), isNull);
-    expect(parseDeepLink(Uri.parse('com.stubapp.stub://log-expense?amount=notanumber')).let((r) => r!.amount), isNull);
+    final missing = parseDeepLink(Uri.parse('com.stubapp.stub://log-expense'));
+    expect(missing!.amount, isNull);
+    final malformed = parseDeepLink(Uri.parse('com.stubapp.stub://log-expense?amount=notanumber'));
+    expect(malformed!.amount, isNull);
   });
 
   test('returns null for a link with a different host (e.g. the auth callback)', () {
@@ -89,18 +91,6 @@ void main() {
     expect(parseDeepLink(Uri.parse('https://example.com')), isNull);
   });
 }
-```
-
-Note: Dart has no built-in `.let()` extension — replace those two lines
-with plain local variables instead:
-
-```dart
-  test('amount is null when missing or malformed, not an error', () {
-    final missing = parseDeepLink(Uri.parse('com.stubapp.stub://log-expense'));
-    expect(missing!.amount, isNull);
-    final malformed = parseDeepLink(Uri.parse('com.stubapp.stub://log-expense?amount=notanumber'));
-    expect(malformed!.amount, isNull);
-  });
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -507,21 +497,6 @@ ManualEntryScreen"):
 
     // Closing and pulling to refresh must not re-open it a second time —
     // the pending value is consumed exactly once.
-    await tester.tap(find.byIcon(Icons.close).evaluate().isNotEmpty
-        ? find.byIcon(Icons.close)
-        : find.byType(IconButton).first);
-    await tester.pumpAndSettle();
-    expect(find.byType(ManualEntryScreen), findsNothing);
-  });
-```
-
-Note: check which close-icon finder actually matches once you run this —
-`ManualEntryScreen`'s close button uses `StubIcon(StubIcons.x, ...)`
-inside an `IconButton`, not a Material `Icons.close`, so simplify that
-tap to `find.byType(IconButton).first` and drop the `Icons.close`
-fallback branch entirely:
-
-```dart
     await tester.tap(find.byType(IconButton).first);
     await tester.pumpAndSettle();
     expect(find.byType(ManualEntryScreen), findsNothing);
