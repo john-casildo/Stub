@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { Pool } from 'pg';
+import { faker } from '@faker-js/faker';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -28,9 +29,37 @@ async function resetTables(): Promise<void> {
   await pool.query('TRUNCATE users, categories, budgets, transactions CASCADE');
 }
 
+async function seedUsers(): Promise<string[]> {
+  console.log(`Seeding ${TARGET_USERS} users...`);
+  const values: string[] = [];
+  const params: unknown[] = [];
+  for (let i = 0; i < TARGET_USERS; i++) {
+    const firstName = faker.person.firstName();
+    const lastName = faker.person.lastName();
+    // Roughly half the fake users are "linked" (have an email), mirroring
+    // real anonymous-vs-linked usage. Appending the loop index guarantees
+    // uniqueness against the `users.email` unique constraint even though
+    // faker.internet.email() alone isn't guaranteed collision-free.
+    const hasEmail = i % 2 === 0;
+    const email = hasEmail
+      ? faker.internet.email({ firstName, lastName }).toLowerCase().replace('@', `+${i}@`)
+      : null;
+    const base = i * 3;
+    values.push(`($${base + 1}, $${base + 2}, $${base + 3})`);
+    params.push(email, firstName, lastName);
+  }
+  const result = await pool.query<{ id: string }>(
+    `insert into users (email, first_name, last_name) values ${values.join(', ')} returning id`,
+    params,
+  );
+  console.log(`Inserted ${result.rows.length} users.`);
+  return result.rows.map((r) => r.id);
+}
+
 async function main() {
   await resetTables();
-  console.log('Reset complete.');
+  const userIds = await seedUsers();
+  console.log(`Reset + users complete. ${userIds.length} users.`);
   await pool.end();
 }
 
