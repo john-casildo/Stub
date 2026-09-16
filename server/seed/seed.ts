@@ -169,11 +169,80 @@ async function seedCategoriesAndBudgets(userIds: string[]): Promise<SeededCatego
   return categories;
 }
 
+const TRANSACTION_SOURCES = ['receipt', 'payment_app', 'bank_screenshot', 'manual'] as const;
+
+function buildWeightedCategoryPool(categories: SeededCategory[]): SeededCategory[] {
+  const pool_: SeededCategory[] = [];
+  for (const category of categories) {
+    // A random per-category weight (1-10 copies in the pool) gives a
+    // Pareto-ish spend distribution — some categories busier than others —
+    // without weighted-random sampling overhead per transaction.
+    const weight = faker.number.int({ min: 1, max: 10 });
+    for (let w = 0; w < weight; w++) pool_.push(category);
+  }
+  return pool_;
+}
+
+function randomSource(): (typeof TRANSACTION_SOURCES)[number] {
+  return faker.helpers.arrayElement(TRANSACTION_SOURCES);
+}
+
+function randomMerchant(source: string): string {
+  return source === 'payment_app' ? faker.person.fullName() : faker.company.name();
+}
+
+function randomAmount(): number {
+  // ~5% of transactions are large (rent/big purchases), the rest everyday spend.
+  const isLarge = faker.number.int({ min: 1, max: 100 }) <= 5;
+  return isLarge
+    ? Number(faker.finance.amount({ min: 500, max: 3000, dec: 2 }))
+    : Number(faker.finance.amount({ min: 2, max: 400, dec: 2 }));
+}
+
+async function seedTransactions(categories: SeededCategory[]): Promise<void> {
+  console.log(`Seeding ${TARGET_TRANSACTIONS} transactions...`);
+  const pool_ = buildWeightedCategoryPool(categories);
+  const oneYearAgo = faker.date.past({ years: 1 });
+  const now = new Date();
+
+  let inserted = 0;
+  while (inserted < TARGET_TRANSACTIONS) {
+    const batchSize = Math.min(TRANSACTION_BATCH_SIZE, TARGET_TRANSACTIONS - inserted);
+    const userIds: string[] = new Array(batchSize);
+    const categoryIds: string[] = new Array(batchSize);
+    const merchants: string[] = new Array(batchSize);
+    const amounts: number[] = new Array(batchSize);
+    const sources: string[] = new Array(batchSize);
+    const occurredAts: string[] = new Array(batchSize);
+
+    for (let i = 0; i < batchSize; i++) {
+      const category = pool_[Math.floor(Math.random() * pool_.length)];
+      const source = randomSource();
+      userIds[i] = category.userId;
+      categoryIds[i] = category.id;
+      merchants[i] = randomMerchant(source);
+      amounts[i] = randomAmount();
+      sources[i] = source;
+      occurredAts[i] = faker.date.between({ from: oneYearAgo, to: now }).toISOString();
+    }
+
+    await pool.query(
+      `insert into transactions (user_id, category_id, merchant, amount, source, occurred_at)
+       select * from unnest($1::uuid[], $2::uuid[], $3::text[], $4::numeric[], $5::text[], $6::timestamptz[])`,
+      [userIds, categoryIds, merchants, amounts, sources, occurredAts],
+    );
+
+    inserted += batchSize;
+    console.log(`  ${inserted.toLocaleString()} / ${TARGET_TRANSACTIONS.toLocaleString()} transactions`);
+  }
+}
+
 async function main() {
   await resetTables();
   const userIds = await seedUsers();
   const categories = await seedCategoriesAndBudgets(userIds);
-  console.log(`Reset + users + categories/budgets complete. ${categories.length} categories.`);
+  await seedTransactions(categories);
+  console.log('Seeding complete.');
   await pool.end();
 }
 
