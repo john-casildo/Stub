@@ -33,8 +33,21 @@ export const options = {
           executor: 'ramping-arrival-rate',
           startRate: 0,
           timeUnit: '1s',
-          preAllocatedVUs: 300,
-          maxVUs: 1000,
+          // Real-run diagnosis (2026-09-16): under this local Docker API's
+          // actual response latency at load (avg ~3.1s, p95 ~6.5s against
+          // the 1.2M-row seeded dataset), sustaining the 2417 req/s peak
+          // rate needs roughly rate * latency concurrent in-flight VUs —
+          // on the order of several thousand, not the 1000 originally
+          // configured here. With maxVUs: 1000, k6 ran out of VUs and had
+          // to drop ~3.5x more iterations than it completed (383,273
+          // dropped vs. 110,766 completed), producing a real total far
+          // short of the ~493,020 target even though every request that
+          // did go out succeeded (0% http_req_failed, 100% checks
+          // passed) — a VU-pool-exhaustion problem, not a correctness or
+          // server-error problem. Raised to give k6 enough headroom to
+          // actually reach the target rate.
+          preAllocatedVUs: 2000,
+          maxVUs: 8000,
           stages: FULL_STAGES,
         },
   },
