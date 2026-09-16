@@ -1,10 +1,18 @@
 import 'dotenv/config';
 import { Pool } from 'pg';
 import { faker } from '@faker-js/faker';
+import jwt from 'jsonwebtoken';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
   throw new Error('DATABASE_URL environment variable is required');
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
 }
 
 // This script unconditionally truncates every app table — refuse to run
@@ -237,11 +245,38 @@ async function seedTransactions(categories: SeededCategory[]): Promise<void> {
   }
 }
 
+function exportUserTokens(userIds: string[], categories: SeededCategory[]): void {
+  console.log('Exporting user tokens for the load test...');
+  const categoryIdsByUser = new Map<string, string[]>();
+  for (const category of categories) {
+    const list = categoryIdsByUser.get(category.userId) ?? [];
+    list.push(category.id);
+    categoryIdsByUser.set(category.userId, list);
+  }
+
+  const entries = userIds
+    // Only export users that ended up with at least one category — the
+    // load test's POST /transactions calls need a valid categoryId.
+    .filter((userId) => (categoryIdsByUser.get(userId)?.length ?? 0) > 0)
+    .map((userId) => ({
+      userId,
+      token: jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: '365d' }),
+      categoryIds: categoryIdsByUser.get(userId)!,
+    }));
+
+  const outDir = path.join(__dirname, 'output');
+  fs.mkdirSync(outDir, { recursive: true });
+  const outFile = path.join(outDir, 'users.json');
+  fs.writeFileSync(outFile, JSON.stringify(entries));
+  console.log(`Wrote ${entries.length} user tokens to ${outFile}`);
+}
+
 async function main() {
   await resetTables();
   const userIds = await seedUsers();
   const categories = await seedCategoriesAndBudgets(userIds);
   await seedTransactions(categories);
+  exportUserTokens(userIds, categories);
   console.log('Seeding complete.');
   await pool.end();
 }
