@@ -1,0 +1,40 @@
+{
+  "id": null,
+  "uid": "k6-load-test",
+  "title": "Stub API Load Test (k6)",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-10m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Requests per minute",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(increase(k6_http_reqs_total[1m]))",
+          "legendFormat": "requests/min",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Total requests (visible time range)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 10 },
+      "targets": [
+        {
+          "expr": "sum(increase(k6_http_reqs_total[$__range]))",
+          "legendFormat": "total requests",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
