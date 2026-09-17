@@ -33,21 +33,25 @@ export const options = {
           executor: 'ramping-arrival-rate',
           startRate: 0,
           timeUnit: '1s',
-          // Real-run diagnosis (2026-09-16): under this local Docker API's
-          // actual response latency at load (avg ~3.1s, p95 ~6.5s against
-          // the 1.2M-row seeded dataset), sustaining the 2417 req/s peak
-          // rate needs roughly rate * latency concurrent in-flight VUs —
-          // on the order of several thousand, not the 1000 originally
-          // configured here. With maxVUs: 1000, k6 ran out of VUs and had
-          // to drop ~3.5x more iterations than it completed (383,273
-          // dropped vs. 110,766 completed), producing a real total far
-          // short of the ~493,020 target even though every request that
-          // did go out succeeded (0% http_req_failed, 100% checks
-          // passed) — a VU-pool-exhaustion problem, not a correctness or
-          // server-error problem. Raised to give k6 enough headroom to
-          // actually reach the target rate.
-          preAllocatedVUs: 2000,
-          maxVUs: 8000,
+          // Real-run diagnosis (2026-09-16): the original 300/1000 here
+          // wasn't enough VU headroom for this API's real per-request
+          // latency under load (avg ~3.1s), so k6 dropped ~3.5x more
+          // iterations than it completed (383,273 dropped vs. 110,766
+          // completed) even though every request that did go out
+          // succeeded (0% http_req_failed). Raising it to 2000/8000
+          // to chase that shortfall made things categorically worse, not
+          // better: it exposed a real server-side bug (server/src/db.ts's
+          // `pg.Pool` defaulting to `max: 10` DB connections, with no
+          // error handler on the pool) as a thundering-herd collapse —
+          // 93.28% of requests failed/timed out and the API container
+          // crashed and was auto-restarted mid-run. That root cause is
+          // now fixed server-side (pool `max` raised to 80, see
+          // db.ts) — with real per-request latency back down near
+          // baseline, a moderate VU ceiling should be plenty; this is
+          // set higher than the original 1000 only as a safety margin,
+          // not because that much concurrency is expected to be needed.
+          preAllocatedVUs: 500,
+          maxVUs: 2000,
           stages: FULL_STAGES,
         },
   },
