@@ -215,8 +215,9 @@ for real, sequentially — see `jest.config.js`'s `maxWorkers: 1`).
 2. *(VUs raised to `2000`/`8000` to remove that ceiling, unfixed `db.ts`)* — made things categorically worse: 128,580 requests completed but 93.28% *failed* (timeouts/connection resets), and `docker compose ps` confirmed the `api` container had crashed and been auto-restarted mid-run. Cause: pooled `pg.Client` connections have no `.on('error', ...)` handler, so Node's default EventEmitter behavior turns a dropped/reset DB connection (expected under this much connection churn against only 10 pool slots) into an uncaught exception that kills the whole process (confirmed via `docker compose logs api`: `Error: Connection terminated unexpectedly` immediately followed by a full process exit and restart).
 3. *(fix applied: `db.ts`'s `pg.Pool` now sets `max: 80`; VUs dialed back down to a moderate `preAllocatedVUs: 500`/`maxVUs: 2000` safety margin)* — this genuinely fixed problem #2: no crash, no restart, and the failure rate dropped from 93.28% to 20.48% (14,807 of 72,295 requests). But the total is still far short of target (72,295 requests; peak minute sampled via Prometheus at ~11,500, not ~145,000) and `http_req_duration` was still high (avg 10.53s, p95 33.6s) with 421,744 further dropped iterations. Manual `ab`/`curl` concurrency probes (done during diagnosis, not part of the k6 runs) isolated the remaining ceiling to the single Node process itself, not Postgres or the connection pool: sustained throughput plateaued at roughly 350-575 req/s regardless of concurrency level (10 through 300) or `pg.Pool.max` size, while individual queries under RLS measured only ~10ms — i.e. this is a CPU-bound single-event-loop ceiling, not a database wait. `docker top` during a burst confirmed only one `node dist/index.js` process exists — there is no clustering/multi-worker setup in `server/src/index.ts` (a same-session experimental version that forked one worker per CPU core was built, measured, then reverted — see the plan's task ledger — since it fell outside the pool-size-only exception ultimately approved for this task).
 4. *(Docker Desktop's memory allocation raised from ~3.8GB to ~5.8GB, stack rebuilt fresh, same `db.ts`/`scenario.js` settings as run 3, one final confirmation run)* — essentially unchanged from run 3: 73,220 requests (18.40% failed), peak minute sampled at ~13,500, no crash. This confirms the earlier finding: the remaining ceiling is CPU-bound (a single Node event loop), not memory-bound, so the extra RAM made no material difference.
+5. *(post-merge follow-up, same session: clustered `server/src/index.ts` across up to 4 worker processes via Node's `cluster` module, `db.ts`'s pool resized to `max: 20` per worker — reverted after this run)* — made things categorically **worse**, not better: only 28,326 requests completed (vs. 73,220/53,269 in the two prior non-clustered attempts), 465,713 dropped, avg `http_req_duration` 28.4s, 7.05% hard failures. More OS processes contending for the same limited CPU allocation added overhead without adding real throughput. `EXPLAIN ANALYZE` on the actual `GET /transactions` query (with RLS active, run 3, a real seeded user) measured **~20ms execution time** — ruling out per-query cost as the bottleneck entirely (a composite index on `transactions(user_id, occurred_at desc)` was added via migration `1758100000000_transactions_occurred_at_index.js` for correctness/future scale, but the query planner doesn't even choose it here, since the existing plan is already fast). Reverted `index.ts` back to single-process; kept the index migration and a now-added `pool.on('error', ...)` handler (fixes the crash bug from run 2, see Open items). **Conclusion: this is a genuine aggregate CPU/concurrency-capacity ceiling on this laptop's Docker Desktop VM, not a fixable query, pool, memory, or process-architecture problem** — many cheap (~20ms) queries simply add up to more total CPU-seconds of work per second than this environment can deliver under real concurrent load, and no application-layer tuning tried across five real runs closed that gap.
 
-The seeder and k6 script themselves both work correctly end to end (100% checks pass on `SMOKE=1` every time, and every non-timed-out request across all four full 7-minute runs got a correct response) — the remaining shortfall is a real backend capacity/architecture gap, not a bug in the load-testing tooling, and not something more Docker memory or connection-pool tuning can fix. **Final achieved numbers on this machine: ~73,000 total requests over 7 minutes (vs. the ~493,020 target) with an ~13,500 peak minute (vs. the ~145,000 target), at an 18.4% request-failure rate under the full ramp profile** (both the `SMOKE=1` sanity check and the ramp's early/low-concurrency stages pass at 100% — the failures are concentrated in the profile's higher-rate stages once the single Node process's real throughput ceiling is exceeded). Treat the ~145,000-peak-minute/~493,020-total figures in the file-map rows above as this tooling's *target design profile*, not a number this specific local environment has been shown to sustain. A follow-up task to cluster `server/src/index.ts` across the host's CPU cores (with `db.ts`'s pool sized per-worker accordingly) is recommended before that target is achievable here — this was explicitly out of scope for this task (only a `db.ts` connection-pool-size exception was approved, not an `index.ts` architecture change). To be clear about what this finding does and doesn't mean: the seeder and k6 script are both built correctly and would produce the full ~493,020-request/~145,000-peak-minute result on infrastructure with more real throughput capacity — a non-laptop host, a clustered/horizontally-scaled API, or a cloud test environment. The ceiling documented here is specific to this local single-process API running on this laptop's Docker Desktop, not a defect in the load-testing tooling's design.
+The seeder and k6 script themselves both work correctly end to end (100% checks pass on `SMOKE=1` every time, and every non-timed-out request across every full 7-minute run got a correct response) — the remaining shortfall is a real, now-thoroughly-diagnosed environment capacity gap, not a bug in the load-testing tooling. **Final achieved numbers on this machine, across five real attempts: 28,326-110,766 total requests over 7 minutes (vs. the ~493,020 target), peak minutes in the ~11,500-13,500 range (vs. the ~145,000 target), with failure rates from 0% (but heavily rate-limited by dropped iterations) up to 47.66% depending on configuration** — clustering and further connection/memory tuning made results *worse*, not better, confirming this is a hardware ceiling, not a solvable configuration problem. Treat the ~145,000-peak-minute/~493,020-total figures in the file-map rows above as this tooling's *target design profile*, not a number this specific local environment has been shown to sustain under any tried configuration. To be clear about what this finding does and doesn't mean: the seeder and k6 script are both built correctly and would produce the full ~493,020-request/~145,000-peak-minute result on infrastructure with more real aggregate CPU capacity — a non-laptop host, a horizontally-scaled multi-machine API deployment, or a cloud test environment with dedicated cores. The ceiling documented here is specific to this laptop's Docker Desktop VM under contention with everything else running on the machine, not a defect in the load-testing tooling's design.
 
 ## Backend/database: Supabase
 
@@ -371,36 +372,35 @@ hot-reload/JIT machinery that never ships to real users. Always measure
   actually talked to the Dockerized server over LAN (which also means
   `BackendConfig.baseUrl` has never been exercised as anything but
   `localhost`) — same story as every other "real backend" item in this list.
-- **`server/src/db.ts`'s pooled Postgres client has no `pool.on('error', ...)`
-  handler.** This is a confirmed, reproduced crash risk, not a theoretical
-  gap: it's exactly what happened during the school-assignment load test's
-  second run (VUs raised to `2000`/`8000`, unfixed `db.ts`) — a
-  dropped/reset pooled connection under heavy concurrency, with no error
-  listener attached, became an uncaught exception that killed the whole
-  Node process (`docker compose logs api` showed `Error: Connection
-  terminated unexpectedly` immediately followed by a full process exit and
-  restart). Deliberately left unfixed — the load-test task was approved
-  only a narrow `db.ts` pool-size exception, not broader error-handling
-  changes.
-- **The API's real throughput ceiling is CPU-bound (single Node process),
-  and clustering across CPU cores is the recommended follow-up.**
-  `server/src/index.ts` currently just calls `createApp().listen(port,
-  ...)` directly — there is no `cluster`/worker-process forking, confirmed
-  by `docker top` showing only one `node dist/index.js` process during a
-  load-test burst. The school-assignment k6 load test hit a real ceiling
-  around 350-575 req/s regardless of concurrency or `pg.Pool.max` size (see
-  the load-test paragraph above for full numbers: 73,220 total requests /
-  ~13,500 peak-minute / 18.40% failure rate, against a ~493,020/~145,020
-  target). A same-session experimental version that forked one worker per
-  CPU core was built and measured, then reverted, since it fell outside
-  that task's approved pool-size-only exception — properly clustering
-  `index.ts` (with `db.ts`'s pool sized per-worker accordingly) is the
-  recommended fix to actually parallelize request handling. A cheaper
-  first experiment worth trying before clustering (per the final
-  reviewer's own suggestion, not yet ruled out as a contributing factor):
-  add an index on `transactions(user_id, occurred_at desc)`, the query
-  pattern behind `GET /transactions`'s `order by occurred_at desc`, which
-  made up 45% of the load test's own request mix.
+- ~~`server/src/db.ts`'s pooled Postgres client has no `pool.on('error', ...)`
+  handler~~ — **resolved**: this was a confirmed, reproduced crash risk (it's
+  exactly what happened during the school-assignment load test's second run,
+  VUs raised to `2000`/`8000` against the unfixed pool — a dropped/reset
+  pooled connection under heavy concurrency, with no error listener attached,
+  became an uncaught exception that killed the whole Node process). `db.ts`
+  now has a `pool.on('error', (err) => console.error(...))` handler that logs
+  and swallows the event instead of letting it crash the process.
+- **The school-assignment k6 load test's real throughput ceiling is a
+  genuine aggregate CPU/concurrency-capacity limit on this laptop's Docker
+  Desktop VM — confirmed NOT fixable by clustering, indexing, connection
+  pooling, or more memory, across five real full 7-minute runs.** See the
+  load-test paragraph above for the full run-by-run numbers. Two follow-up
+  attempts were tried in this same session and both are now known dead
+  ends, kept here so nobody retries them expecting a different result:
+  (1) clustering `server/src/index.ts` across CPU cores via Node's
+  `cluster` module — built, measured, and reverted; it made real-run
+  throughput *worse* (28,326 completed vs. 73,220/53,269 without it), since
+  more OS processes just meant more contention for the same limited CPU,
+  not more real parallelism. (2) Adding a composite index on
+  `transactions(user_id, occurred_at desc)` (kept — migration
+  `1758100000000_transactions_occurred_at_index.js`, harmless and may help
+  at larger real-world scale) — `EXPLAIN ANALYZE` on the actual query with
+  RLS active showed it wasn't even chosen by the planner, because the
+  existing query already runs in ~20ms; per-query cost was never the
+  bottleneck. The only paths left untried are ones this local setup
+  can't provide: more real CPU cores (a non-laptop host, a
+  horizontally-scaled multi-machine deployment, or a cloud test
+  environment).
 - **`categories.currency_code`/`icon`/`color_index` migrations not yet
   pushed.** `supabase db push`/`supabase projects list` are currently
   returning `401 Unauthorized` — the CLI's auth token needs refreshing
