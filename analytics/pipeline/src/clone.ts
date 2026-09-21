@@ -1,14 +1,34 @@
 import { spawn } from 'child_process';
 
+// Neither pg_dump nor psql are given a connect timeout by default, so if a
+// host is unreachable-but-routable (packets silently dropped rather than
+// actively refused — unlike the "Connection refused" case already handled
+// below), the TCP connect attempt itself can hang indefinitely. That means
+// the process never exits, so 'close' never fires, so finish() never runs,
+// so the returned promise never settles — the mirror case of the
+// dump.kill() deadlock documented below (that one was "psql dies early,
+// pg_dump hangs on write"; this one is "pg_dump/psql itself hangs on
+// connect"). Fail fast instead by appending a connect_timeout query param
+// to the connection URL before spawning either process.
+export function withConnectTimeout(url: string, seconds: number): string {
+  const parsed = new URL(url);
+  parsed.searchParams.set('connect_timeout', String(seconds));
+  return parsed.toString();
+}
+
+const CONNECT_TIMEOUT_SECONDS = 10;
+
 export async function cloneDatabase(sourceUrl: string, targetUrl: string): Promise<void> {
+  const sourceUrlWithTimeout = withConnectTimeout(sourceUrl, CONNECT_TIMEOUT_SECONDS);
+  const targetUrlWithTimeout = withConnectTimeout(targetUrl, CONNECT_TIMEOUT_SECONDS);
   return new Promise((resolve, reject) => {
-    const dump = spawn('pg_dump', ['--clean', '--if-exists', '--no-owner', '--no-privileges', sourceUrl]);
+    const dump = spawn('pg_dump', ['--clean', '--if-exists', '--no-owner', '--no-privileges', sourceUrlWithTimeout]);
     // -v ON_ERROR_STOP=1: without it, psql keeps going and still exits 0
     // after a failed statement inside the restore (e.g. a broken COPY
     // block) — with pg_dump also exiting 0, the clone would report success
     // with partial/corrupt data. A real, confirmed gap in the same family
     // as the pg_dump-exit-code bug above, found in review.
-    const restore = spawn('psql', ['-v', 'ON_ERROR_STOP=1', targetUrl]);
+    const restore = spawn('psql', ['-v', 'ON_ERROR_STOP=1', targetUrlWithTimeout]);
 
     dump.stdout.pipe(restore.stdin);
 
