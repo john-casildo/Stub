@@ -3,9 +3,24 @@ import { spawn } from 'child_process';
 export async function cloneDatabase(sourceUrl: string, targetUrl: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const dump = spawn('pg_dump', ['--clean', '--if-exists', '--no-owner', '--no-privileges', sourceUrl]);
-    const restore = spawn('psql', [targetUrl]);
+    // -v ON_ERROR_STOP=1: without it, psql keeps going and still exits 0
+    // after a failed statement inside the restore (e.g. a broken COPY
+    // block) — with pg_dump also exiting 0, the clone would report success
+    // with partial/corrupt data. A real, confirmed gap in the same family
+    // as the pg_dump-exit-code bug above, found in review.
+    const restore = spawn('psql', ['-v', 'ON_ERROR_STOP=1', targetUrl]);
 
     dump.stdout.pipe(restore.stdin);
+
+    // If psql dies early (e.g. can't reach the target database), the pipe
+    // from dump.stdout tries to write to restore.stdin after it's already
+    // closed, which raises an unhandled 'error' event on the stream and
+    // crashes the process with a raw EPIPE stack trace before the real
+    // exit-code check below gets a chance to build a useful message. A
+    // real, confirmed bug found in review, reproduced against an invalid
+    // target. Swallow it here — the exit-code check still reports the
+    // actual failure.
+    restore.stdin.on('error', () => {});
 
     let dumpStderr = '';
     let restoreStderr = '';
@@ -40,7 +55,24 @@ export async function cloneDatabase(sourceUrl: string, targetUrl: string): Promi
     };
 
     dump.on('close', (code) => { dumpCode = code; dumpClosed = true; finish(); });
-    restore.on('close', (code) => { restoreCode = code; restoreClosed = true; finish(); });
+    restore.on('close', (code) => {
+      restoreCode = code;
+      restoreClosed = true;
+      // If psql exits early (e.g. it couldn't connect) while pg_dump is
+      // still running, swallowing the stdin write error above (so it
+      // doesn't crash) isn't enough on its own — nothing is draining
+      // dump.stdout any more, so once its OS pipe buffer fills, pg_dump
+      // blocks forever on its own write() and the whole clone hangs
+      // indefinitely instead of failing. A real, confirmed deadlock found
+      // while verifying the stdin-error fix above against an actual
+      // invalid target (three real hung `pg_dump` processes were left
+      // running in the container until this was added). Kill pg_dump so
+      // it can't hang once its output has nowhere left to go.
+      if (!dumpClosed) {
+        dump.kill();
+      }
+      finish();
+    });
   });
 }
 
