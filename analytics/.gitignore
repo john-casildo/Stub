@@ -2,3 +2,7 @@ node_modules/
 dist/
 department-files/output/
 .env
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfstate.*.backup
