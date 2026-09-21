@@ -57,6 +57,11 @@ resource "docker_image" "pipeline" {
     context    = "${path.module}/.."
     dockerfile = "pipeline/Dockerfile"
   }
+  triggers = {
+    dockerfile_sha = filesha256("${path.module}/../pipeline/Dockerfile")
+    source_sha     = sha256(join("", [for f in fileset("${path.module}/../pipeline/src", "**") : filesha256("${path.module}/../pipeline/src/${f}")]))
+    package_sha    = filesha256("${path.module}/../package.json")
+  }
 }
 
 resource "docker_container" "pipeline" {
