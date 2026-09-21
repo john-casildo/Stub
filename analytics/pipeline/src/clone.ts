@@ -15,16 +15,32 @@ export async function cloneDatabase(sourceUrl: string, targetUrl: string): Promi
     dump.on('error', reject);
     restore.on('error', reject);
 
-    restore.on('close', (code) => {
-      if (code === 0) {
+    // Both processes' exit codes matter: pg_dump piping into psql can have
+    // pg_dump fail immediately (e.g. a client/server version mismatch) while
+    // psql still exits 0 having simply received an empty/incomplete stream
+    // and done nothing — a real, confirmed silent-failure mode found during
+    // Task 8's clean-slate verification. Wait for both processes to close
+    // and reject if either exited non-zero.
+    let dumpCode: number | null = null;
+    let restoreCode: number | null = null;
+    let dumpClosed = false;
+    let restoreClosed = false;
+
+    const finish = () => {
+      if (!dumpClosed || !restoreClosed) return;
+      if (dumpCode === 0 && restoreCode === 0) {
         console.log('Clone complete.');
         resolve();
       } else {
         reject(new Error(
-          `psql restore exited with code ${code}.\npg_dump stderr: ${dumpStderr}\npsql stderr: ${restoreStderr}`,
+          `Clone failed (pg_dump exited ${dumpCode}, psql restore exited ${restoreCode}).\n`
+          + `pg_dump stderr: ${dumpStderr}\npsql stderr: ${restoreStderr}`,
         ));
       }
-    });
+    };
+
+    dump.on('close', (code) => { dumpCode = code; dumpClosed = true; finish(); });
+    restore.on('close', (code) => { restoreCode = code; restoreClosed = true; finish(); });
   });
 }
 
