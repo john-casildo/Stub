@@ -1,0 +1,26 @@
+{
+  "name": "stub-analytics",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "generate-files": "ts-node --transpile-only department-files/generate.ts",
+    "build": "tsc",
+    "pipeline:start": "ts-node --transpile-only pipeline/src/index.ts",
+    "pipeline:run-now": "RUN_NOW=1 ts-node --transpile-only pipeline/src/index.ts"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^18.0.2",
+    "exceljs": "^4.4.0",
+    "node-cron": "^4.6.0",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^10.6.0",
+    "@types/node": "^26.6.2",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.23.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^7.0.2"
+  }
+}
