@@ -117,6 +117,10 @@ it.
 | `server/seed/seed.ts` | School-assignment Faker seeder (not app logic) — bulk-inserts ~3,000 fake users, ~18,000 categories/budgets, and 1,200,000+ transactions directly into Postgres (bypassing RLS via the `postgres` superuser role, `DATABASE_URL`), then exports a signed JWT + category IDs per user to `seed/output/users.json` (gitignored) for the k6 load test to consume. Refuses to run unless `DATABASE_URL`'s host looks local, since it unconditionally `TRUNCATE`s every app table first. Run via `cd server && npm run seed` |
 | `server/loadtest/scenario.js` | k6 load test (school-assignment requirement: a target profile of ~500,000 requests over 7 minutes, peaking at ~145,000 requests in one minute) against the real running API, using `seed/output/users.json`'s tokens; weighted 85/15 toward reads (`GET /transactions`/`/budgets`/`/categories`/`/account`) over writes (`POST /transactions`). `SMOKE=1 k6 run scenario.js` runs a 15s/5rps sanity check instead of the full profile — this passes reliably (100% checks succeeded across every real run in this environment). **The full profile has not been achieved against this local Docker stack** (see the new CLAUDE.md paragraph below, after "Backend/database: two backends, one switch," for the full run-by-run diagnosis): the committed config is `preAllocatedVUs: 500`/`maxVUs: 2000` (after `db.ts`'s pool size was fixed — see that paragraph). The latest clean, verified-good-data 7-minute run against this config completed **81,479 total requests (80.95% success, 19.04% failure rate)**, against target numbers of ~493,020 total / ~145,020 peak-minute — a genuine local CPU/concurrency-capacity throughput ceiling, not a bug in the seeder or k6 script (see the diagnosis paragraph's 7 real runs, including a data-integrity false alarm from `npm test` truncating the seeded tables mid-session — don't run the two together without reseeding after). Run the real thing via `k6 run --out experimental-prometheus-rw scenario.js` with `docker compose up -d` (postgres/api/prometheus/grafana) already running; view results live at `http://localhost:3001` (Grafana, anonymous viewer access, dashboard auto-provisioned from `server/loadtest/grafana/provisioning/`) |
 | `server/loadtest/scenario-15min.js` | Exploratory, non-deliverable variant of `scenario.js` — same ramp shape, peak held for 9 minutes instead of 1 (15 minutes total), built to see whether a longer window changes the throughput ceiling finding. It doesn't: four real runs landed tightly in the **150,000-180,000 total requests** range (152,492 / 179,592 / 152,093 / 160,302), with success rates varying 86.42%-99.10% run to run depending on what else was competing for CPU on the host at the time — a stable, repeatable ceiling, not noise, and not something a longer run window overcomes. Run via `k6 run --out experimental-prometheus-rw scenario-15min.js` from `server/loadtest/`, same prerequisites as `scenario.js` |
+| `analytics/department-files/generate.ts` | School-assignment Faker generator for three synthetic "shadow IT" department files with deliberately mismatched employee-name fields (`emp_nom` in the Excel, `nombre_empl` in the CSV, `NOMBRE_EMPLEADO` in the JSON) — `contabilidad.xlsx` (120 rows, revenue/expenses), `finanzas.csv` (36 rows, monthly department budgets), `operaciones.json` (80 rows, support tickets/incidents/uptime checks). Output is gitignored (`department-files/output/`), regenerated via `cd analytics && npm run generate-files` |
+| `analytics/pipeline/` | School-assignment nightly analytics pipeline (`clone.ts` + `etl.ts` + `index.ts`, Dockerized) — clones the real `server/` production Postgres into a separate Analytics DB via `pg_dump \| psql` (`clone.ts`), then reads the three department files and normalizes each one's mismatched employee-name field into one `nombre_empleado` column across three new tables (`accounting_records`/`department_budgets`/`ops_metrics`, `etl.ts`). `index.ts` runs both via `node-cron` at midnight by default, or once immediately via `RUN_NOW=1`. Managed by `analytics/terraform/` (below), not `server/docker-compose.yml`. `clone.ts` waits on **both** the `pg_dump` and `psql` child processes' exit codes before deciding success/failure — a real, confirmed bug found during Task 8's clean-slate verification: the original version only checked `psql`'s exit code, so a `pg_dump` failure (a Postgres client/server version mismatch — see the Dockerfile row below) went completely silent, since `psql` still exits `0` having received an empty/truncated stdin stream and restored nothing. A clone that "succeeds" in under a second (instead of the ~14s a real 1.2M-row `pg_dump \| psql` takes) is the tell that this regressed |
+| `analytics/pipeline/Dockerfile` | Builds the pipeline image on `node:20-slim`. Installs **`postgresql-client-16`** specifically, from the PGDG apt repo (`apt.postgresql.org`) — not the distro-default `postgresql-client` package, which resolves to v15 on Debian bookworm. This is a real, confirmed fix, not defensive over-engineering: both Postgres servers this pipeline talks to (`server/docker-compose.yml`'s `postgres` and this package's own `terraform/main.tf`'s `analytics-db`) are pinned to `postgres:16`, and `pg_dump` v15 refuses outright to dump a v16 server ("aborting because of server version mismatch") — combined with the `clone.ts` bug above, this made every clone silently no-op until both were fixed together during Task 8's verification pass |
+| `analytics/terraform/` | Local Terraform (`kreuzwerker/docker` provider) managing exactly the two containers this assignment adds — `analytics-db` (a second, independent Postgres 16 on host port 5433) and `analytics-pipeline` (built from `analytics/pipeline/Dockerfile`) — both joined to `server/docker-compose.yml`'s existing `server_default` network via a `data "docker_network"` lookup, never creating or destroying it. `terraform apply`/`terraform destroy` from this directory; `server/`'s own stack and lifecycle are untouched. **A `terraform destroy` on a machine where `server-postgres-1` (or anything else) is also running `postgres:16` will reliably fail to remove `docker_image.analytics_postgres`** — Docker refuses to delete an image layer another, unrelated container still references (confirmed twice: once during Task 7's own verification, once again during Task 8's independent clean-slate re-run) — while the containers and volume it actually owns still get destroyed cleanly. The fix is `terraform state rm docker_image.analytics_postgres` (not `docker rmi -f`, which would risk disrupting the unrelated container); the next `terraform apply` recreates a correctly-tracked image resource with no other side effects |
 | `app/lib/data/api_client.dart` | `ApiClient` + `ApiException` (carries the server's `error.code`, so callers branch the same way they already do on `PostgrestException.code`) — the shared HTTP layer under every `Http*` class. Owns the session lifecycle: `_ensureToken()` reads the stored JWT or `POST`s `/auth/anonymous`, **memoizing the in-flight sign-in in `_tokenFuture`** so two callers racing at cold start (`HttpAccountLinkService`'s constructor vs. `RootShell._load()`) share one sign-in instead of creating two `users` rows and silently orphaning one (a real, confirmed bug, caught by the whole-branch review). `_tokenFuture` is cleared in a `finally` — on failure too, so a failed sign-in can't wedge every later caller onto a dead future. `_send` retries the entire request **exactly once** on a `401` (delete the token, re-run `_ensureToken`, re-issue), recovering from an expired/orphaned JWT that previously left the app permanently stuck until app data was manually cleared; a second 401 falls through to the throw, so it can't loop |
 | `app/lib/data/local_auth_token_store.dart` | `LocalAuthTokenStore` — `SharedPreferences`-backed `readToken`/`writeToken`/`deleteToken` for the custom backend's JWT, the role Supabase's own session persistence plays today. `deleteToken` exists for `ApiClient`'s 401 recovery above (see Open items — a JWT is more sensitive than `LocalPrefs`' UI-only values, so `flutter_secure_storage` is worth revisiting) |
 | `app/lib/data/http_category_repository.dart`, `http_transaction_repository.dart`, `http_budget_repository.dart`, `http_account_link_service.dart` | The `Http*` implementations of the same four interfaces the `Supabase*` classes implement — thin mappers over `ApiClient`, no logic of their own beyond row shaping. `HttpAccountLinkService` differs from its Supabase sibling in one way that matters: its getters are filled in by an async `/account` fetch kicked off in its constructor, not from an already-cached session, so it emits on `linkStatusChanges` when that lands and `ProfileScreen` subscribes to rebuild (closing what was a long-standing "no subscriber" Open item) |
@@ -222,6 +226,67 @@ for real, sequentially — see `jest.config.js`'s `maxWorkers: 1`).
 7. *(four exploratory 15-minute runs, `server/loadtest/scenario-15min.js` — same ramp shape as the assignment's `scenario.js` but the peak held for 9 minutes instead of 1, not the assignment deliverable)* — 152,492 (86.42% success) / 179,592 (99.10% success) / 152,093 (97.79% success) / 160,302 (92.72% success) total requests, respectively. Tight, repeatable clustering in the **150,000-180,000 total requests** range across all four, roughly double the 7-minute runs' totals over roughly double the duration — confirming the same conclusion: this is a stable, reproducible per-second capacity ceiling, not something a longer run window overcomes. The success-rate spread (86-99%) run to run, with total requests staying almost constant, shows the ceiling itself is stable while how gracefully requests fail near it depends on transient contention from whatever else was running on the host at the time (browser tabs, other Docker containers, etc.) — not a sign the underlying limit is moving.
 
 The seeder and k6 script themselves both work correctly end to end (100% checks pass on `SMOKE=1` every time, and every non-timed-out request across every full run got a correct response, data-integrity mishap in run 6 aside) — the remaining shortfall is a real, now-thoroughly-diagnosed environment capacity gap, not a bug in the load-testing tooling. **Final achieved numbers on this machine, across five real attempts: 28,326-110,766 total requests over 7 minutes (vs. the ~493,020 target), peak minutes in the ~11,500-13,500 range (vs. the ~145,000 target), with failure rates from 0% (but heavily rate-limited by dropped iterations) up to 47.66% depending on configuration** — clustering and further connection/memory tuning made results *worse*, not better, confirming this is a hardware ceiling, not a solvable configuration problem. Treat the ~145,000-peak-minute/~493,020-total figures in the file-map rows above as this tooling's *target design profile*, not a number this specific local environment has been shown to sustain under any tried configuration. To be clear about what this finding does and doesn't mean: the seeder and k6 script are both built correctly and would produce the full ~493,020-request/~145,000-peak-minute result on infrastructure with more real aggregate CPU capacity — a non-laptop host, a horizontally-scaled multi-machine API deployment, or a cloud test environment with dedicated cores. The ceiling documented here is specific to this laptop's Docker Desktop VM under contention with everything else running on the machine, not a defect in the load-testing tooling's design.
+
+## Analytics pipeline (school assignment)
+
+`analytics/` (repo root, sibling to `server/`) is a second school
+assignment, separate from the API/seeder/load-test one: it adds a
+nightly-scheduled clone of the production Postgres database into a
+second, independent Analytics Postgres database, plus a custom ETL that
+ingests three synthetic "shadow IT" department files (an Accounting
+Excel, a Finance CSV, an Operations JSON) — each with a differently
+named/cased employee field (`emp_nom`/`nombre_empl`/`NOMBRE_EMPLEADO`) —
+normalizing all three into one `nombre_empleado` column across three new
+Analytics DB tables. Local Terraform (`kreuzwerker/docker` provider)
+manages exactly the two containers this adds (`analytics-db`,
+`analytics-pipeline`); `server/docker-compose.yml` and its containers are
+untouched. See `analytics/department-files/generate.ts`,
+`analytics/pipeline/`, and `analytics/terraform/`'s file-map entries
+above for what each piece does and how to run it. No Jest coverage (not
+app logic, same convention as `server/seed/`/`server/loadtest/`) —
+verified by running the full clone+ETL and checking real row counts and
+normalized values in the Analytics DB.
+
+**Full clean-slate verification (2026-09-21, Task 8)**: destroyed and
+rebuilt the entire stack from scratch — `terraform destroy` on
+`analytics/terraform/` (hit and worked around the known
+`docker_image.analytics_postgres` removal conflict documented in that
+file-map row above), `docker compose down -v` + `up -d --build` on
+`server/`, a fresh `npm run seed` (3,000 users / 17,973 categories /
+1,200,000 transactions), `npm run generate-files`, then a clean
+`terraform init`/`apply`. **Found and fixed two real bugs in the process
+that would otherwise have made every scheduled clone a silent no-op**:
+`analytics/pipeline/Dockerfile` was installing Debian's default
+`postgresql-client` (v15) against two `postgres:16` servers, so `pg_dump`
+aborted immediately on a version mismatch — and `clone.ts` only checked
+`psql`'s exit code, not `pg_dump`'s, so the failure was invisible
+("Clone complete." printed in under a second with nothing actually
+copied). Fixed both (pin `postgresql-client-16` via the PGDG apt repo;
+`clone.ts` now waits on and checks both processes' exit codes) — see
+those two file-map rows above for detail. After the fix, a real pipeline
+run (`docker exec -e RUN_NOW=1 ... analytics-pipeline node
+dist/pipeline/src/index.js`) took ~14s (consistent with a genuine
+1.2M-row `pg_dump | psql`) and produced:
+
+```
+=== production ===                    === analytics clone ===
+users:         3000                    users:         3000
+categories:    17973                   categories:    17973
+transactions:  1200000                 transactions:  1200000
+```
+
+ETL table counts and a sample of each table's normalized name column:
+
+```
+accounting_records:  120 rows   nombre_empleado: Deontae Kirlin, Shelley Effertz, Dexter Carroll
+department_budgets:   36 rows   nombre_empleado: Joanna Goyette, Maud Leannon, Zora DuBuque
+ops_metrics:          80 rows   nombre_empleado: Marjolaine Steuber, Sherwood Schiller, Brielle Baumbach
+```
+
+All three tables have zero null/empty `nombre_empleado` values across
+their full row count (checked, not just the first few rows). Every count
+above matches the brief's expected values (`120`/`36`/`80`) exactly, and
+production-vs-clone counts match exactly on all three tables.
 
 ## Backend/database: Supabase
 
