@@ -175,8 +175,41 @@ Luego:
 
 ## Dashboard en Metabase
 
-Ya construido: gráficos de gasto por empleado, gasto por categoría,
-ingresos vs. gastos por mes, presupuesto vs. gastado por departamento,
-tickets por estado, y tiempo de resolución por tipo — usando las tablas
-de `accounting_records`, `department_budgets` y `ops_metrics`. Ver
-`CLAUDE.md` para la guía paso a paso de cómo se armó cada uno.
+Ya construido (2026-09-23, vía la API de Metabase, no a mano) — tres
+dashboards en tres collections separadas, con las 25 preguntas (SQL
+nativo) que los respaldan:
+
+**App Usage & Financial Health** (datos de producción clonados: `users`,
+`categories`, `budgets`, `transactions`) — KPIs (usuarios, transacciones,
+volumen total, monto promedio), transacciones por semana, gasto por
+categoría, top merchants, y adherencia a presupuesto (`budget_progress`).
+Hoy está disperso a propósito: la producción real solo tiene 1 usuario y
+0 transacciones (no hay datos del seeder de carga dejados ahí a propósito
+— ver el punto sobre `npm run seed`/`npm test` en `CLAUDE.md`), así que
+estos gráficos se llenarán con el uso real de la app, no son un bug.
+
+**Department Spend (Shadow IT)** (las 10 tablas ETL) — gasto total por
+empleado cruzando accounting/purchases/marketing/legal (union manual en
+SQL, ya que Metabase no puede unir tablas distintas desde su query
+builder), presupuesto vs. gastado por departamento, gasto de accounting
+por tipo, headcount de HR, presupuesto de marketing por canal, inventario
+por ubicación, valor de contratos legales en el tiempo, tickets de
+soporte por estado/prioridad, tiempo de resolución de ops por tipo, y
+acciones del audit log por resultado. Este dashboard sí está completamente
+poblado.
+
+**Data Quality & Pipeline Health** — conteo de filas por tabla ETL,
+chequeo de `nombre_empleado` nulo/vacío por tabla (siempre debe dar cero
+en las 10), frescura del clonado de producción, y frescura de carga
+(`loaded_at`) por tabla ETL — para detectar de un vistazo si el pipeline
+nocturno se quedó atascado o si el clonado se volvió un no-op silencioso
+otra vez.
+
+Acceso: http://localhost:3002 — la cuenta de admin es local a esta
+instancia de Metabase (guardada en el volumen `metabase_data`, no en este
+repo); si nadie recuerda la contraseña, la forma más simple de recuperar
+acceso es resetear el contenedor (`terraform destroy
+-target=docker_container.metabase -target=docker_volume.metabase_data`
+seguido de `terraform apply`) y volver a correr el setup — en ese caso
+los 3 dashboards y las 25 preguntas hay que reconstruirlos (no hay export
+automático de Metabase a este repo todavía).
