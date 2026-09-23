@@ -27,6 +27,18 @@ final _paymentAppKeywordPattern = RegExp(
   r'total|monto|amount|enviad[oa]|enviaste|pagad[oa]|pagaste|sent|paid',
   caseSensitive: false,
 );
+// Cash tendered / change-due lines print a real dollar figure that's
+// frequently >= the actual total (change is only owed when cash > total),
+// and a tight-spacing OCR row-merge can pull a "TOTAL:" line and the next
+// printed "EFECTIVO"/"CAMBIO" line together into one block of text. A row
+// carrying one of these words is never a safe source for the transaction
+// amount — excluded from both total-keyword matching and the
+// largest-amount fallback below, rather than trusted just because it sits
+// next to (or was merged with) the real total line.
+final _cashOrChangeKeywordPattern = RegExp(
+  r'efectivo|cambio|cash tendered|change due|amount tendered|cash back',
+  caseSensitive: false,
+);
 final _mmddyyyyPattern = RegExp(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})');
 final _isoDatePattern = RegExp(r'(\d{4})-(\d{1,2})-(\d{1,2})');
 final _longDigitRunPattern = RegExp(r'\d{8,}');
@@ -147,6 +159,19 @@ const _merchantMatchThreshold = 0.5;
 /// (an item name, an address) shouldn't override the real header.
 const _merchantMatchLineLimit = 5;
 
+/// A merchant-name candidate must have at least this many letters to be
+/// used as the fallback guess — guards against a short OCR misread (e.g.
+/// "fP" from a logo or decorative header mark) winning by virtue of just
+/// being the first non-empty line.
+const _merchantMinLetters = 3;
+
+final _letterPattern = RegExp(r'[a-zA-ZÀ-ÿ]');
+
+bool _isPlausibleMerchantLine(String text) {
+  final letterCount = _letterPattern.allMatches(text).length;
+  return letterCount >= _merchantMinLetters;
+}
+
 /// Extracts a best-effort merchant/amount/date guess from OCR output.
 /// Every field may come back null — the caller must always route the
 /// result through a review screen, never save it directly.
@@ -188,6 +213,7 @@ ParsedReceipt parseReceiptLines(
   double? largestAmount;
   double? totalLineAmount;
   for (final text in rowTexts) {
+    if (_cashOrChangeKeywordPattern.hasMatch(text)) continue;
     final match = _amountPattern.firstMatch(text);
     if (match == null) continue;
     final value = double.tryParse(match.group(1)!.replaceAll(',', ''));
@@ -217,7 +243,7 @@ ParsedReceipt parseReceiptLines(
   for (final text in redactedTexts) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) continue;
-    merchant ??= trimmed;
+    if (merchant == null && _isPlausibleMerchantLine(trimmed)) merchant = trimmed;
     if (candidatesChecked >= _merchantMatchLineLimit) continue;
     candidatesChecked++;
     for (final known in knownMerchants) {

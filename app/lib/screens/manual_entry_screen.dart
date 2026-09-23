@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/category.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../util/currency.dart';
@@ -18,7 +19,7 @@ class ManualEntryScreen extends StatefulWidget {
     this.initialMerchant,
   });
 
-  final List<String> categories;
+  final List<Category> categories;
   final VoidCallback onClose;
   final void Function(double amount, String merchant, String category) onSave;
   /// Pre-fills the amount/merchant fields — used when this screen is
@@ -41,12 +42,28 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
   late final _amountController = TextEditingController(
     text: widget.initialAmount == null ? '0.00' : widget.initialAmount!.toStringAsFixed(2),
   );
+  final _amountFocusNode = FocusNode();
   late final _merchantController = TextEditingController(text: widget.initialMerchant ?? '');
-  late String _selected = widget.categories.first;
+  late Category _selected = widget.categories.first;
+
+  @override
+  void initState() {
+    super.initState();
+    // Select the whole placeholder/prior value on focus so the first
+    // keystroke replaces it outright, instead of the user having to
+    // manually erase "0.00" (or a pre-filled amount) before typing a new
+    // number.
+    _amountFocusNode.addListener(() {
+      if (_amountFocusNode.hasFocus) {
+        _amountController.selection = TextSelection(baseOffset: 0, extentOffset: _amountController.text.length);
+      }
+    });
+  }
 
   @override
   void dispose() {
     _amountController.dispose();
+    _amountFocusNode.dispose();
     _merchantController.dispose();
     super.dispose();
   }
@@ -87,13 +104,14 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                         shaderCallback: (rect) => StubColors.gradPop(brightness).createShader(rect),
                         child: TextField(
                           controller: _amountController,
+                          focusNode: _amountFocusNode,
                           textAlign: TextAlign.center,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          inputFormatters: [ThousandsSeparatorInputFormatter()],
+                          inputFormatters: [ThousandsSeparatorInputFormatter(maxValue: _maxAmount)],
                           style: StubText.unbounded(fontSize: 32, color: Colors.white),
                           decoration: InputDecoration(
                             border: InputBorder.none,
-                            prefixText: '\$',
+                            prefixText: currencySymbolFor(_selected.currencyCode),
                             prefixStyle: StubText.unbounded(fontSize: 32, color: Colors.white),
                           ),
                         ),
@@ -128,7 +146,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                       runSpacing: 8,
                       children: [
                         for (final c in widget.categories)
-                          StubChip(label: c, selected: c == _selected, onTap: () => setState(() => _selected = c)),
+                          StubChip(label: c.name, selected: c.id == _selected.id, onTap: () => setState(() => _selected = c)),
                       ],
                     ),
                   ],
@@ -147,7 +165,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                     );
                     return;
                   }
-                  widget.onSave(amount, _merchantController.text, _selected);
+                  widget.onSave(amount, _merchantController.text, _selected.name);
                 },
               ),
             ],

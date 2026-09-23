@@ -174,26 +174,21 @@ void main() {
     expect(savedColorIndex, 1);
   });
 
-  testWidgets('Blocks save and shows a message when the limit exceeds the max', (tester) async {
-    var saveCalled = false;
-
+  testWidgets('Blocks typing a limit above the sanity cap at the keystroke level', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: AddCategoryScreen(
           onClose: () {},
-          onSave: (name, limit, type, start, end, currencyCode, icon, colorIndex) => saveCalled = true,
+          onSave: (name, limit, type, start, end, currencyCode, icon, colorIndex) {},
         ),
       ),
     );
 
-    await tester.enterText(find.byType(TextField).first, 'Groceries');
     await tester.enterText(find.byType(TextField).last, '20000000000');
-    await tester.ensureVisible(find.text('Save category'));
-    await tester.tap(find.text('Save category'));
     await tester.pump();
 
-    expect(find.textContaining("can't be more than"), findsOneWidget);
-    expect(saveCalled, isFalse);
+    expect(find.text('20000000000'), findsNothing);
+    expect(find.text('20,000,000,000'), findsNothing);
   });
 
   testWidgets('Category name field enforces a max length', (tester) async {

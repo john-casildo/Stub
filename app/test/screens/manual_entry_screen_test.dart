@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stub/models/category.dart';
 import 'package:stub/screens/manual_entry_screen.dart';
 
 void main() {
@@ -9,7 +10,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ManualEntryScreen(
-          categories: const ['Groceries', 'Dining', 'Transport'],
+          categories: const [
+            Category(id: 'c1', name: 'Groceries'),
+            Category(id: 'c2', name: 'Dining'),
+            Category(id: 'c3', name: 'Transport'),
+          ],
           onClose: () {},
           onSave: (amount, merchant, category) {
             savedAmount = amount;
@@ -32,7 +37,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: ManualEntryScreen(
-          categories: const ['Groceries'],
+          categories: const [Category(id: 'c1', name: 'Groceries')],
           onClose: () {},
           onSave: (amount, merchant, category) => savedAmount = amount,
         ),
@@ -48,31 +53,11 @@ void main() {
     expect(savedAmount, 1234567.89);
   });
 
-  testWidgets('Blocks save and shows a message when the amount exceeds the max', (tester) async {
-    var saveCalled = false;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ManualEntryScreen(
-          categories: const ['Groceries'],
-          onClose: () {},
-          onSave: (amount, merchant, category) => saveCalled = true,
-        ),
-      ),
-    );
-
-    await tester.enterText(find.byType(TextField), '20000000000');
-    await tester.tap(find.text('Save entry'));
-    await tester.pump();
-
-    expect(find.textContaining("can't be more than"), findsOneWidget);
-    expect(saveCalled, isFalse);
-  });
-
   testWidgets('Pre-fills the amount and merchant when given initial values', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: ManualEntryScreen(
-          categories: const ['Groceries'],
+          categories: const [Category(id: 'c1', name: 'Groceries')],
           initialAmount: 12.50,
           initialMerchant: 'Starbucks',
           onClose: () {},
@@ -85,11 +70,71 @@ void main() {
     expect(find.text('Starbucks'), findsOneWidget);
   });
 
+  testWidgets('Amount prefix switches to the selected category\'s own currency symbol', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualEntryScreen(
+          categories: const [
+            Category(id: 'c1', name: 'Groceries'),
+            Category(id: 'c2', name: 'Costa Rica trip', currencyCode: 'CRC'),
+          ],
+          onClose: () {},
+          onSave: (amount, merchant, category) {},
+        ),
+      ),
+    );
+
+    expect(find.text('\$'), findsOneWidget);
+
+    await tester.tap(find.text('Costa Rica trip'));
+    await tester.pump();
+
+    expect(find.text('₡'), findsOneWidget);
+    expect(find.text('\$'), findsNothing);
+  });
+
+  testWidgets('Tapping the amount field selects the existing text so typing replaces it outright', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualEntryScreen(
+          categories: const [Category(id: 'c1', name: 'Groceries')],
+          onClose: () {},
+          onSave: (amount, merchant, category) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final selection = field.controller!.selection;
+    expect(selection.baseOffset, 0);
+    expect(selection.extentOffset, field.controller!.text.length);
+  });
+
+  testWidgets('Blocks typing an amount above the sanity cap at the keystroke level', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManualEntryScreen(
+          categories: const [Category(id: 'c1', name: 'Groceries')],
+          onClose: () {},
+          onSave: (amount, merchant, category) {},
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), '20000000000');
+    await tester.pump();
+
+    expect(find.text('0.00'), findsOneWidget);
+  });
+
   testWidgets('Still defaults to 0.00 and "Add a name" when no initial values are given', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: ManualEntryScreen(
-          categories: const ['Groceries'],
+          categories: const [Category(id: 'c1', name: 'Groceries')],
           onClose: () {},
           onSave: (amount, merchant, category) {},
         ),

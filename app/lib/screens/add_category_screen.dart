@@ -118,7 +118,7 @@ class _AddCategoryScreenState extends State<AddCategoryScreen> {
               TextField(
                 controller: _limitController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [ThousandsSeparatorInputFormatter()],
+                inputFormatters: [ThousandsSeparatorInputFormatter(maxValue: _maxLimitAmount)],
                 decoration: const InputDecoration(labelText: 'Limit'),
               ),
               const SizedBox(height: 20),

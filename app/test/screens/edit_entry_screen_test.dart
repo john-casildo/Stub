@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:stub/models/category.dart';
 import 'package:stub/screens/edit_entry_screen.dart';
 
 void main() {
@@ -12,7 +13,11 @@ void main() {
         home: EditEntryScreen(
           merchant: 'Corner Market',
           amount: 18.42,
-          categories: const ['Groceries', 'Dining', 'Household'],
+          categories: const [
+            Category(id: 'c1', name: 'Groceries'),
+            Category(id: 'c2', name: 'Dining'),
+            Category(id: 'c3', name: 'Household'),
+          ],
           selectedCategory: 'Groceries',
           sourceLabel: 'Receipt scan',
           dateLabel: 'Today',
@@ -39,13 +44,41 @@ void main() {
     expect(savedCategory, 'Dining');
   });
 
+  testWidgets('Amount symbol switches to the newly-selected category\'s own currency', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditEntryScreen(
+          merchant: 'Corner Market',
+          amount: 18.42,
+          categories: const [
+            Category(id: 'c1', name: 'Groceries'),
+            Category(id: 'c2', name: 'Costa Rica trip', currencyCode: 'CRC'),
+          ],
+          selectedCategory: 'Groceries',
+          sourceLabel: 'Receipt scan',
+          dateLabel: 'Today',
+          onClose: () {},
+          onSave: (_, _, _) {},
+          onDelete: () {},
+        ),
+      ),
+    );
+
+    expect(find.textContaining('\$18.42'), findsOneWidget);
+
+    await tester.tap(find.text('Costa Rica trip'));
+    await tester.pump();
+
+    expect(find.textContaining('₡18.42'), findsOneWidget);
+  });
+
   testWidgets('Tapping the merchant field opens an editable dialog that updates the value', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: EditEntryScreen(
           merchant: 'Corner Market',
           amount: 18.42,
-          categories: const ['Groceries'],
+          categories: const [Category(id: 'c1', name: 'Groceries')],
           selectedCategory: 'Groceries',
           sourceLabel: 'Receipt scan',
           dateLabel: 'Today',
@@ -75,7 +108,7 @@ void main() {
           isCreating: true,
           merchant: 'Corner Market',
           amount: 18.42,
-          categories: const ['Groceries'],
+          categories: const [Category(id: 'c1', name: 'Groceries')],
           selectedCategory: 'Groceries',
           sourceLabel: 'Receipt scan',
           dateLabel: 'Today',
@@ -99,7 +132,7 @@ void main() {
           isCreating: true,
           merchant: '',
           amount: 18.42,
-          categories: const ['Groceries'],
+          categories: const [Category(id: 'c1', name: 'Groceries')],
           selectedCategory: 'Groceries',
           sourceLabel: 'Receipt scan',
           dateLabel: 'Today',
@@ -125,7 +158,7 @@ void main() {
           isCreating: true,
           merchant: 'Corner Market',
           amount: 0,
-          categories: const ['Groceries'],
+          categories: const [Category(id: 'c1', name: 'Groceries')],
           selectedCategory: 'Groceries',
           sourceLabel: 'Receipt scan',
           dateLabel: 'Today',

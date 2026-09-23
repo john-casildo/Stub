@@ -27,6 +27,16 @@ class ApiClient {
   final LocalAuthTokenStore tokenStore;
   final http.Client _http;
 
+  /// Without an explicit timeout, an unreachable server (wrong LAN IP,
+  /// phone on a different network, server down) leaves `http.Client`
+  /// waiting on the underlying TCP connection indefinitely — long enough,
+  /// on a real device, to look like a hang or even trip the OS into
+  /// killing an unresponsive app. Every request below is wrapped in this
+  /// instead, so a connectivity problem surfaces as a normal thrown
+  /// exception (caught by `RootShell`'s existing error+retry UI) within a
+  /// bounded time.
+  static const _requestTimeout = Duration(seconds: 10);
+
   /// In-flight anonymous sign-in, shared by every concurrent caller. Without
   /// this, two calls racing at cold start (e.g. `HttpAccountLinkService`'s
   /// constructor and `RootShell._load()`) would both find no stored token and
@@ -53,7 +63,7 @@ class ApiClient {
   }
 
   Future<String> _fetchAndStoreToken() async {
-    final response = await _http.post(Uri.parse('$baseUrl/auth/anonymous'));
+    final response = await _http.post(Uri.parse('$baseUrl/auth/anonymous')).timeout(_requestTimeout);
     if (response.statusCode != 201) {
       throw ApiException(response.statusCode, 'anonymous_sign_in_failed', 'Could not start a session');
     }
@@ -65,18 +75,14 @@ class ApiClient {
 
   Future<http.Response> _issue(String method, Uri uri, String token, String? encoded) async {
     final headers = {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'};
-    switch (method) {
-      case 'GET':
-        return _http.get(uri, headers: headers);
-      case 'POST':
-        return _http.post(uri, headers: headers, body: encoded);
-      case 'PATCH':
-        return _http.patch(uri, headers: headers, body: encoded);
-      case 'DELETE':
-        return _http.delete(uri, headers: headers);
-      default:
-        throw ArgumentError('Unsupported method $method');
-    }
+    final response = switch (method) {
+      'GET' => _http.get(uri, headers: headers),
+      'POST' => _http.post(uri, headers: headers, body: encoded),
+      'PATCH' => _http.patch(uri, headers: headers, body: encoded),
+      'DELETE' => _http.delete(uri, headers: headers),
+      _ => throw ArgumentError('Unsupported method $method'),
+    };
+    return response.timeout(_requestTimeout);
   }
 
   Future<dynamic> _send(String method, String path, {Map<String, dynamic>? body}) async {

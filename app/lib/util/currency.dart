@@ -64,6 +64,13 @@ final List<String> supportedCurrencies = _symbols.keys.toList(growable: false);
 
 String _symbolFor(String code) => _symbols[code] ?? '\$';
 
+/// Public symbol lookup for UI that needs to show a currency prefix
+/// without formatting a full amount (e.g. an editable amount field's
+/// leading symbol) — [currencyCode] falls back to the global
+/// [CurrencyConfig.code] default when null, same rule [formatCurrency]
+/// follows.
+String currencySymbolFor(String? currencyCode) => _symbolFor(currencyCode ?? CurrencyConfig.code);
+
 /// Shared currency formatter — every screen that shows a dollar amount
 /// must import this instead of hand-rolling `toStringAsFixed(2)`, so
 /// thousands separators and the sign are consistent everywhere.

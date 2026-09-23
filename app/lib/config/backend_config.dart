@@ -15,7 +15,7 @@ class BackendConfig {
   /// Find your LAN IP with `ipconfig getifaddr en0` (Wi-Fi) on macOS. This
   /// keeps the committed default portable across machines/networks.
   static const String baseUrl =
-      String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:3000');
+      String.fromEnvironment('API_BASE_URL', defaultValue: 'http://192.168.1.173:3000');
 
   static const BackendMode mode = BackendMode.customServer;
 }

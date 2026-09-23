@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/category.dart';
 import '../theme/colors.dart';
 import '../theme/text.dart';
 import '../util/currency.dart';
@@ -26,7 +27,7 @@ class EditEntryScreen extends StatefulWidget {
   final bool isCreating;
   final String merchant;
   final double amount;
-  final List<String> categories;
+  final List<Category> categories;
   final String selectedCategory;
   final String sourceLabel;
   final String dateLabel;
@@ -42,6 +43,14 @@ class _EditEntryScreenState extends State<EditEntryScreen> {
   late String _selected = widget.selectedCategory;
   late String _merchant = widget.merchant;
   late double _amount = widget.amount;
+
+  /// The currently-selected category's own currency override, or null to
+  /// use the app's global default — resolved fresh each build so picking
+  /// a different category chip immediately updates the amount's symbol.
+  String? get _selectedCurrencyCode {
+    final matches = widget.categories.where((c) => c.name == _selected);
+    return matches.isEmpty ? null : matches.first.currencyCode;
+  }
 
   Future<void> _editMerchant() async {
     final result = await showDialog<String>(
@@ -90,7 +99,7 @@ class _EditEntryScreenState extends State<EditEntryScreen> {
               StubFieldRow(label: 'Merchant', value: _merchant, editable: true, onTap: _editMerchant),
               StubFieldRow(
                 label: 'Amount',
-                value: formatCurrency(_amount),
+                value: formatCurrency(_amount, currencyCode: _selectedCurrencyCode),
                 mono: true,
                 editable: true,
                 onTap: _editAmount,
@@ -107,7 +116,7 @@ class _EditEntryScreenState extends State<EditEntryScreen> {
                       runSpacing: 8,
                       children: [
                         for (final c in widget.categories)
-                          StubChip(label: c, selected: c == _selected, onTap: () => setState(() => _selected = c)),
+                          StubChip(label: c.name, selected: c.name == _selected, onTap: () => setState(() => _selected = c.name)),
                       ],
                     ),
                   ],

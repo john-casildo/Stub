@@ -124,6 +124,21 @@ void main() {
       expect(result.amount, 5415.00);
     });
 
+    test('never picks a cash-tendered/change amount as the total, even if OCR merges its row with TOTAL', () {
+      // On a real device, tight line spacing on some receipts row-merges
+      // "TOTAL:" with the very next printed line ("EFECTIVO") into one
+      // OCR'd block, which could otherwise let the larger cash-tendered
+      // figure masquerade as the total merely by sorting first in the
+      // merged row's text.
+      final lines = [
+        _line('TOTAL: EFECTIVO', top: 0, left: 0),
+        _line('10,000.00', top: 0, left: 100),
+        _line('5,415.00', top: 0, left: 200),
+      ];
+      final result = parseReceiptLines(lines);
+      expect(result.amount, isNot(10000.00));
+    });
+
     test('returns null amount when no currency-shaped number is found', () {
       final lines = [_line('Corner Market'), _line('Thank you for shopping')];
       final result = parseReceiptLines(lines);
@@ -149,6 +164,16 @@ void main() {
         _line('Total \$20.00', top: 20),
       ];
       final result = parseReceiptLines(lines, knownMerchants: const ['Costco', 'Walmart']);
+      expect(result.merchant, 'Corner Market');
+    });
+
+    test('skips a too-short/garbage first line and uses the next plausible one as merchant', () {
+      final lines = [
+        _line('fP', top: 0),
+        _line('Corner Market', top: 20),
+        _line('Total \$10.00', top: 40),
+      ];
+      final result = parseReceiptLines(lines);
       expect(result.merchant, 'Corner Market');
     });
 

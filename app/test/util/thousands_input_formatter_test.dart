@@ -37,4 +37,27 @@ void main() {
     expect(result.text, '1,000');
     expect(result.selection.baseOffset, 1);
   });
+
+  group('maxValue', () {
+    final capped = ThousandsSeparatorInputFormatter(maxValue: 100.0);
+
+    TextEditingValue formatWith(ThousandsSeparatorInputFormatter f, String oldText, String newText) => f.formatEditUpdate(
+          TextEditingValue(text: oldText, selection: TextSelection.collapsed(offset: oldText.length)),
+          TextEditingValue(text: newText, selection: TextSelection.collapsed(offset: newText.length)),
+        );
+
+    test('rejects a keystroke that would push the value above the cap', () {
+      final result = formatWith(capped, '10', '1000');
+      expect(result.text, '10');
+    });
+
+    test('still allows a value at or under the cap', () {
+      expect(formatWith(capped, '9', '99').text, '99');
+      expect(formatWith(capped, '9', '100').text, '100');
+    });
+
+    test('with no maxValue given, no cap is enforced', () {
+      expect(format('999999999999').text, '999,999,999,999');
+    });
+  });
 }

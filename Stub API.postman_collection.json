@@ -1,0 +1,191 @@
+{
+  "info": {
+    "name": "Stub API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "token", "value": "" },
+    { "key": "categoryId", "value": "" },
+    { "key": "transactionId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health",
+        "auth": { "type": "noauth" }
+      }
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Anonymous sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('token', body.token);",
+                  "console.log('Saved token for user', body.userId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/anonymous",
+            "auth": { "type": "noauth" }
+          }
+        },
+        {
+          "name": "Link email",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/link-email",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"you@example.com\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Account",
+      "item": [
+        {
+          "name": "Get account",
+          "request": { "method": "GET", "url": "{{baseUrl}}/account" }
+        },
+        {
+          "name": "Update name",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/account/name",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Ada\",\n  \"lastName\": \"Lovelace\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "List categories",
+          "request": { "method": "GET", "url": "{{baseUrl}}/categories" }
+        },
+        {
+          "name": "Create category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('categoryId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/categories",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Groceries\",\n  \"currencyCode\": null,\n  \"icon\": \"cart\",\n  \"colorIndex\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete category",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/categories/{{categoryId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "List transactions",
+          "request": { "method": "GET", "url": "{{baseUrl}}/transactions?limit=50&offset=0" }
+        },
+        {
+          "name": "Create transaction",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('transactionId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/transactions",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{categoryId}}\",\n  \"merchant\": \"Corner Market\",\n  \"amount\": 12.50,\n  \"source\": \"manual\",\n  \"occurredAt\": \"2026-09-09T12:00:00.000Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update transaction",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/transactions/{{transactionId}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{categoryId}}\",\n  \"merchant\": \"Corner Market\",\n  \"amount\": 15.00,\n  \"source\": \"manual\",\n  \"occurredAt\": \"2026-09-09T12:00:00.000Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete transaction",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/transactions/{{transactionId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Budgets",
+      "item": [
+        {
+          "name": "List budgets",
+          "request": { "method": "GET", "url": "{{baseUrl}}/budgets" }
+        },
+        {
+          "name": "Create budget",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/budgets",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{categoryId}}\",\n  \"limitAmount\": 500.00,\n  \"periodType\": \"monthly\",\n  \"periodStart\": \"2026-09-01\",\n  \"periodEnd\": null\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

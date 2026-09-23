@@ -257,7 +257,7 @@ class _RootShellState extends State<RootShell> {
         isCreating: true,
         merchant: parsed.merchant ?? '',
         amount: parsed.amount ?? 0,
-        categories: [for (final c in categories) c.name],
+        categories: categories,
         selectedCategory: categories.first.name,
         sourceLabel: transactionSourceLabel(source),
         dateLabel: transactionDateLabel(parsed.occurredAt ?? DateTime.now()),
@@ -283,7 +283,7 @@ class _RootShellState extends State<RootShell> {
       builder: (_) => EditEntryScreen(
         merchant: transaction.merchant,
         amount: transaction.amount,
-        categories: [for (final c in categories) c.name],
+        categories: categories,
         selectedCategory: transaction.category,
         sourceLabel: transaction.sourceLabel,
         dateLabel: transaction.dateLabel,
@@ -556,7 +556,7 @@ class _RootShellState extends State<RootShell> {
     }
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ManualEntryScreen(
-        categories: [for (final c in categories) c.name],
+        categories: categories,
         initialAmount: initialAmount,
         initialMerchant: initialMerchant,
         onClose: () => Navigator.of(context).pop(),

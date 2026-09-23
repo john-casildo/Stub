@@ -5,6 +5,15 @@ import 'package:flutter/services.dart';
 /// decimal point. Callers must strip the commas back out (`.replaceAll(',',
 /// '')`) before `double.tryParse`-ing the field's text.
 class ThousandsSeparatorInputFormatter extends TextInputFormatter {
+  /// When given, a keystroke that would push the field's parsed value
+  /// above this cap is rejected outright (the field just doesn't change)
+  /// rather than letting the user type an over-limit number and finding
+  /// out only when Save rejects it — the same sanity-cap value every
+  /// amount/limit field in the app already enforces at save time.
+  ThousandsSeparatorInputFormatter({this.maxValue});
+
+  final double? maxValue;
+
   static final _validCharacters = RegExp(r'^\d*\.?\d*$');
   static final _digitOrDot = RegExp(r'[\d.]');
   static final _nonDigitOrDot = RegExp(r'[^\d.]');
@@ -15,6 +24,12 @@ class ThousandsSeparatorInputFormatter extends TextInputFormatter {
 
     final raw = newValue.text.replaceAll(',', '');
     if (!_validCharacters.hasMatch(raw)) return oldValue;
+
+    final max = maxValue;
+    if (max != null) {
+      final parsed = double.tryParse(raw);
+      if (parsed != null && parsed > max) return oldValue;
+    }
 
     final parts = raw.split('.');
     final wholePart = parts[0];
