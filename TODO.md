@@ -240,3 +240,11 @@ done; fold anything durable into `CLAUDE.md` instead of leaving it here.
       the actual source. Fixed: real source label (`transactionSourceLabel`)
       restored, plus a new DATE row so the date isn't lost. Implemented
       same session, with a regression test in `root_shell_test.dart`.
+- [ ] Mid-task request (raised while brainstorming the product-analytics
+      instrumentation design, not yet started): style the "App Usage &
+      Financial Health" Metabase dashboard's KPI cards to match the
+      "Overview" dashboard's card look (currency-formatted scalars,
+      section headings, title banner) — same polish already applied to
+      Overview, not yet applied to the other two dashboards (Department
+      Spend, Data Quality). Will pick this up once the current
+      brainstorm/approval is done, unless told to switch now.
